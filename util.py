@@ -1,5 +1,5 @@
 import cv2
-import sys
+import base64
 
 def load_video_thumbnail(video_path, time_sec=0):
     """Load a thumbnail image from the video at the specified time (in seconds)."""
@@ -8,26 +8,22 @@ def load_video_thumbnail(video_path, time_sec=0):
         print("Error: Could not open video.")
         return None
 
-    fps = cap.get(cv2.CAP_PROP_FPS)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     frame_number = int(fps * time_sec)
     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
 
     ret, frame = cap.read()
     cap.release()
 
-    if not ret:
+    if not ret or frame is None:
         print("Error: Could not read frame.")
         return None
 
     return frame
 
-def load_videos_from_directory(directory_path='videos/'):
-    """Load all video file paths from the specified directory.
-    
-    Outputs them in the form:
-    [{'title': 'Echo Ultrasound', 'desc': 'Track objects in echocardiography videos.', 'path': 'videos/Echo/echo1.mp4'}, ...]
 
-    """
+def load_videos_from_directory(directory_path='videos/'):
+    """Load all video file paths from the specified directory."""
     import os
     video_list = []
     for root, dirs, files in os.walk(directory_path):
@@ -35,8 +31,139 @@ def load_videos_from_directory(directory_path='videos/'):
             if file.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
                 video_path = os.path.join(root, file)
                 title = os.path.splitext(file)[0].replace('_', ' ').title()
-                desc = "Description for " + title  # Placeholder description
+                desc = "Description for " + title
                 video_list.append({'title': title, 'desc': desc, 'path': video_path})
 
     print("Loaded videos:", video_list)
     return video_list
+
+
+def make_square_bbox(center, box_size, w, h):
+    cx, cy = center
+    half = box_size // 2
+    x = int(cx - half)
+    y = int(cy - half)
+    x = max(0, min(x, w - box_size))
+    y = max(0, min(y, h - box_size))
+    return (x, y, int(box_size), int(box_size))
+
+
+def stream_video(
+    socketio,
+    video_path: str,
+    fps_limit: int,
+    target_size: tuple[int, int],
+    box_size: int,
+    pick_tracker_fn,
+    tracker_type: str,
+    state: dict,
+):
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        socketio.emit("status", f"Error: Cannot open video: {video_path}")
+        state["tracking_active"] = False
+        return
+
+    target_w, target_h = target_size
+
+    # Seek to last known position (resume)
+    resume_frame = int(state.get("resume_frame", 0) or 0)
+    if resume_frame > 0:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, resume_frame)
+        socketio.emit("status", f"Resuming at frame {resume_frame} (click to set ROI if needed)")
+    else:
+        socketio.emit("status", "Streaming started (click the video to select ROI center)")
+
+    while state["tracking_active"]:
+        ret, frame = cap.read()
+
+        if not ret or frame is None:
+            socketio.emit("status", "Reached end of video.")
+            state["tracking_active"] = False
+            break
+
+        # Record resume position after successful read
+        state["resume_frame"] = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+
+        # Resize to tracking/output size
+        frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+        h, w = frame.shape[:2]
+
+        # Initialize tracker once we have a click
+        if state.get("clicked_pt") is not None and not state.get("tracker_inited", False):
+            pt = state["clicked_pt"]
+            state["clicked_pt"] = None  # consume click to avoid repeated init attempts
+
+            bbox0 = make_square_bbox(pt, box_size, w, h)
+
+            try:
+                state["tracker"] = pick_tracker_fn(tracker_type)
+                state["tracker"].init(frame, bbox0)  # init may return None; ignore
+
+                # Optional sanity check: one immediate update to verify
+                ok_init, _ = state["tracker"].update(frame)
+                state["tracker_inited"] = bool(ok_init)
+
+                socketio.emit(
+                    "status",
+                    f"Tracker init attempted using {tracker_type}. First update ok={state['tracker_inited']}."
+                )
+
+                if not state["tracker_inited"]:
+                    state["tracker"] = None
+            except Exception as e:
+                state["tracker"] = None
+                state["tracker_inited"] = False
+                socketio.emit("status", f"Tracker init failed ({tracker_type}): {e}")
+
+        # Update tracker if initialized
+        if state.get("tracker_inited") and state.get("tracker") is not None:
+            timer = cv2.getTickCount()
+            ok, bbox = state["tracker"].update(frame)
+            fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
+
+            if ok:
+                x, y, bw, bh = bbox
+                cx = int(x + bw / 2)
+                cy = int(y + bh / 2)
+
+                # Crosshair
+                cv2.drawMarker(
+                    frame, (cx, cy), (0, 255, 0),
+                    markerType=cv2.MARKER_CROSS, markerSize=14, thickness=2
+                )
+
+                # Optional bbox
+                if state.get("show_bbox", True):
+                    cv2.rectangle(
+                        frame,
+                        (int(x), int(y)),
+                        (int(x + bw), int(y + bh)),
+                        (0, 255, 0),
+                        2
+                    )
+            else:
+                cv2.putText(
+                    frame, "Tracking failure", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2
+                )
+
+            cv2.putText(
+                frame, f"{tracker_type} Tracker", (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
+            )
+            cv2.putText(
+                frame, f"FPS : {int(fps)}", (10, 90),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
+            )
+
+        # Encode and emit frame
+        ok_jpg, buffer = cv2.imencode(".jpg", frame)
+        if ok_jpg:
+            frame_b64 = base64.b64encode(buffer).decode("utf-8")
+            socketio.emit("frame", frame_b64)
+
+        socketio.sleep(1 / fps_limit)
+
+    cap.release()
+    socketio.emit("status", "Streaming stopped")
