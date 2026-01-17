@@ -9,7 +9,7 @@ if __name__ == '__main__' :
     # Instead of MIL, you can also use
  
     tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
-    tracker_type = tracker_types[7]
+    tracker_type = tracker_types[2]
 
     if int(minor_ver) < 3:
         tracker = cv2.Tracker_create(tracker_type)
@@ -30,7 +30,7 @@ if __name__ == '__main__' :
             tracker = cv2.TrackerMOSSE_create()
         if tracker_type == "CSRT":
             tracker = cv2.TrackerCSRT_create()
- 
+
     # Read video
     video = cv2.VideoCapture("echo1.mp4")
 
@@ -38,16 +38,16 @@ if __name__ == '__main__' :
     if not video.isOpened():
         print("Could not open video")
         sys.exit()
- 
+
     # Read first frame.
     ok, frame = video.read()
     if not ok:
         print('Cannot read video file')
         sys.exit()
-     
+
     # Define an initial bounding box
     bbox = (287, 23, 86, 320)
- 
+
     # Uncomment the line below to select a different bounding box
     # Create a large window for ROI selection
     cv2.namedWindow('ROI Selector', cv2.WINDOW_NORMAL)
@@ -67,7 +67,7 @@ if __name__ == '__main__' :
         ok, frame = video.read()
         if not ok:
             break
-         
+        
         # Start timer
         timer = cv2.getTickCount()
  
@@ -85,7 +85,7 @@ if __name__ == '__main__' :
             cv2.rectangle(frame, p1, p2, (255,0,0), 2, 1)
         else :
             # Tracking failure
-            cv2.putText(frame, "Tracking failure detected", (100,80), cv2.FONT_HERSHEY_SIMPLEX, 0.01,(0,0,255),2)
+            cv2.putText(frame, "Tracking failure detected", (-50,80), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0,0,255),2)
  
         # Display tracker type on frame
         cv2.putText(frame, tracker_type + " Tracker", (0,20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50,170,50),2);
