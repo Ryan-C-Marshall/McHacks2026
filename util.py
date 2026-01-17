@@ -20,3 +20,23 @@ def load_video_thumbnail(video_path, time_sec=0):
         return None
 
     return frame
+
+def load_videos_from_directory(directory_path='videos/'):
+    """Load all video file paths from the specified directory.
+    
+    Outputs them in the form:
+    [{'title': 'Echo Ultrasound', 'desc': 'Track objects in echocardiography videos.', 'path': 'videos/Echo/echo1.mp4'}, ...]
+
+    """
+    import os
+    video_list = []
+    for root, dirs, files in os.walk(directory_path):
+        for file in files:
+            if file.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
+                video_path = os.path.join(root, file)
+                title = os.path.splitext(file)[0].replace('_', ' ').title()
+                desc = "Description for " + title  # Placeholder description
+                video_list.append({'title': title, 'desc': desc, 'path': video_path})
+
+    print("Loaded videos:", video_list)
+    return video_list
