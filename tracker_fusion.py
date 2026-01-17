@@ -1,6 +1,8 @@
 import cv2
 import sys
 
+FRAME_RESIZE = 8
+
 if __name__ == '__main__':
     # Create trackers using legacy module
     tracker1 = cv2.legacy.TrackerKCF_create()
@@ -13,7 +15,7 @@ if __name__ == '__main__':
     tracker_type2 = "CSRT"
     
     # Read video
-    video = cv2.VideoCapture("echo1.mp4")
+    video = cv2.VideoCapture("videos/Echo/echo1.mp4")
     
     if not video.isOpened():
         print("Could not open video")
@@ -21,6 +23,9 @@ if __name__ == '__main__':
     
     # Read first frame
     ok, frame = video.read()
+
+    frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
+
     if not ok:
         print('Cannot read video file')
         sys.exit()
@@ -28,7 +33,8 @@ if __name__ == '__main__':
     # Select ROI
     cv2.namedWindow('ROI Selector', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('ROI Selector', 1280, 720)
-    bbox = cv2.selectROI('ROI Selector', frame, False)
+    bbox = (611, 534, 156, 120)
+    # bbox = cv2.selectROI('ROI Selector', frame, False)
     cv2.destroyWindow('ROI Selector')
     
     # Initialize both trackers with same bbox
@@ -40,8 +46,11 @@ if __name__ == '__main__':
     cv2.namedWindow('Tracking', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('Tracking', 1280, 720)
     
+    
     while True:
         ok, frame = video.read()
+        frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
+
         if not ok:
             break
         

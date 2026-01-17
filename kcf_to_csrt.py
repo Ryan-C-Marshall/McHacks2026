@@ -1,0 +1,156 @@
+import cv2
+import sys
+
+FRAME_RESIZE = 8
+
+
+
+def contains(box_1, box_2):
+    # Check if center of box_2 is inside box_1
+    x1_1, y1_1, w1, h1 = box_1
+    x2_1, y2_1, w2, h2 = box_2
+    
+    # Calculate center of box_2
+    center_x = x2_1 + w2 / 2
+    center_y = y2_1 + h2 / 2
+    
+    # Check if center is inside box_1
+    if (x1_1 <= center_x <= x1_1 + w1) and (y1_1 <= center_y <= y1_1 + h1):
+        return True
+    return False
+
+
+def test_tester():
+    """Test cases for the tester function"""
+    # Test 1: Center of box_2 clearly inside box_1
+    assert contains((0, 0, 100, 100), (25, 25, 20, 20)) == True, "Test 1 failed: Center inside"
+    
+    # Test 2: Center of box_2 clearly outside box_1
+    assert contains((0, 0, 100, 100), (200, 200, 20, 20)) == False, "Test 2 failed: Center outside"
+    
+    # Test 3: Center of box_2 on edge of box_1 (should be True with <= operator)
+    assert contains((0, 0, 100, 100), (100, 100, 20, 20)) == True, "Test 3 failed: Center on edge"
+    
+    # Test 4: Boxes completely separate
+    assert contains((0, 0, 50, 50), (100, 100, 30, 30)) == False, "Test 4 failed: Completely separate"
+    
+    # Test 5: box_2 partially overlaps but center is inside
+    assert contains((0, 0, 100, 100), (80, 80, 40, 40)) == True, "Test 5 failed: Partial overlap with center inside"
+
+    # Test 6: box_2 much larger but center inside box_1
+    assert contains((20, 20, 60, 60), (10, 10, 100, 100)) == True, "Test 6 failed: Large box with center inside"
+
+    print("All tests passed!")
+
+
+if __name__ == '__main__':
+    # Create trackers using legacy module
+    tracker1 = cv2.TrackerKCF_create()
+    tracker2 = cv2.legacy.TrackerCSRT_create()
+    tracker3 = cv2.legacy.TrackerMedianFlow_create()
+
+    tracker_type1 = "KCF"  # Add these variables
+    tracker_type2 = "CSRT"
+    tracker_type3 = "MEDIANFLOW"
+    
+    # Read video
+    video = cv2.VideoCapture("videos/Echo/echo1.mp4")
+    
+    if not video.isOpened():
+        print("Could not open video")
+        sys.exit()
+    
+    # Read first frame
+    ok, frame = video.read()
+
+    frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
+
+    if not ok:
+        print('Cannot read video file')
+        sys.exit()
+    
+    # Select ROI
+    cv2.namedWindow('ROI Selector', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('ROI Selector', 1280, 720)
+    bbox = (448, 475, 87, 105)
+    bbox = cv2.selectROI('ROI Selector', frame, False)
+    print(bbox)
+    cv2.destroyWindow('ROI Selector')
+    
+    # Initialize both trackers with same bbox
+    ok1 = tracker1.init(frame, bbox)
+    ok2 = tracker2.init(frame, bbox)  # Fix: was tracker1 again
+    ok3 = tracker3.init(frame, bbox)
+    
+    # Create tracking window
+    cv2.namedWindow('Tracking', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Tracking', 1280, 720)
+    
+    
+    while True:
+        ok, frame = video.read()
+        frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
+
+        if not ok:
+            break
+        
+        timer = cv2.getTickCount()
+        
+        # Update trackers
+        ok1, bbox1 = tracker1.update(frame)
+        ok2, bbox2 = tracker2.update(frame)
+        ok3, bbox3 = tracker3.update(frame)
+
+        
+        fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
+        
+        if ok1:
+            # Draw bounding box from tracker 1
+            p1_1 = (int(bbox1[0]), int(bbox1[1]))
+            p1_2 = (int(bbox1[0] + bbox1[2]), int(bbox1[1] + bbox1[3]))
+            cv2.rectangle(frame, p1_1, p1_2, (255, 0, 0), 2, 1)
+
+            cv2.putText(frame, f"{tracker_type1}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+        
+        elif ok2:
+            # Draw bounding box from tracker 2
+            p2_1 = (int(bbox2[0]), int(bbox2[1]))
+            p2_2 = (int(bbox2[0] + bbox2[2]), int(bbox2[1] + bbox2[3]))
+            cv2.rectangle(frame, p2_1, p2_2, (0, 255, 0), 2, 1)
+            cv2.putText(frame, f"{tracker_type2}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+
+        
+        elif ok3:
+            # Draw bounding box from tracker 3
+            p3_1 = (int(bbox3[0]), int(bbox3[1]))
+            p3_2 = (int(bbox3[0] + bbox3[2]), int(bbox3[1] + bbox3[3]))
+            cv2.rectangle(frame, p3_1, p3_2, (0, 0, 255), 2, 1)
+            cv2.putText(frame, f"{tracker_type3}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+        
+        else:
+            cv2.putText(frame, "Tracking failure detected", (10, 30), 
+            cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
+
+        
+        
+        # Display info
+        
+        # cv2.putText(frame, f"{tracker_type1} + {tracker_type2}", (10, 30), 
+        # cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2)
+        cv2.putText(frame, f"FPS : {int(fps)}", (10, 60), 
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (204, 0, 204), 2)
+
+        cv2.putText(frame, f"Box: {contains(bbox1, bbox2)})", (10, 90), 
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (204, 0, 204), 2)
+        
+        cv2.imshow("Tracking", frame)
+        
+        k = cv2.waitKey(22) & 0xff
+        if k == 27:  # ESC
+            break
+        
+
+    video.release()
+    cv2.destroyAllWindows()
