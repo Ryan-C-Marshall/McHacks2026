@@ -1,5 +1,6 @@
 import cv2
 import sys
+from util import pick_tracker
 
 FRAME_RESIZE = 8
 BOX_SIZE = 100 
@@ -28,27 +29,6 @@ def make_square_bbox(center, box_size, w, h):
 
     return (x, y, int(box_size), int(box_size))
 
-def pick_tracker(tracker_type):
-
-    if int(minor_ver) < 3:
-        return cv2.Tracker_create(tracker_type)
-    else:
-        if tracker_type == 'BOOSTING':
-            return cv2.legacy.TrackerBoosting_create()
-        if tracker_type == 'MIL':
-            return cv2.TrackerMIL_create()
-        if tracker_type == 'KCF':
-            return cv2.TrackerKCF_create()
-        if tracker_type == 'TLD':
-            return cv2.TrackerTLD_create()
-        if tracker_type == 'MEDIANFLOW':
-            return cv2.legacy.TrackerMedianFlow_create()
-        if tracker_type == 'GOTURN':
-            return cv2.TrackerGOTURN_create()
-        if tracker_type == 'MOSSE':
-            return cv2.TrackerMOSSE_create()
-        if tracker_type == "CSRT":
-            return cv2.TrackerCSRT_create()
 
 if __name__ == '__main__' :
  

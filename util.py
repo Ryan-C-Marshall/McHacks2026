@@ -1,6 +1,30 @@
 import cv2
 import base64
 
+(major_ver, minor_ver, subminor_ver) = (cv2.__version__).split('.')
+
+def pick_tracker(tracker_type):
+
+    if int(minor_ver) < 3:
+        return cv2.Tracker_create(tracker_type)
+    else:
+        if tracker_type == 'BOOSTING':
+            return cv2.legacy.TrackerBoosting_create()
+        if tracker_type == 'MIL':
+            return cv2.TrackerMIL_create()
+        if tracker_type == 'KCF':
+            return cv2.TrackerKCF_create()
+        if tracker_type == 'TLD':
+            return cv2.TrackerTLD_create()
+        if tracker_type == 'MEDIANFLOW':
+            return cv2.legacy.TrackerMedianFlow_create()
+        if tracker_type == 'GOTURN':
+            return cv2.TrackerGOTURN_create()
+        if tracker_type == 'MOSSE':
+            return cv2.TrackerMOSSE_create()
+        if tracker_type == "CSRT":
+            return cv2.TrackerCSRT_create()
+
 def load_video_thumbnail(video_path, time_sec=0):
     """Load a thumbnail image from the video at the specified time (in seconds)."""
     cap = cv2.VideoCapture(video_path)
@@ -54,7 +78,6 @@ def stream_video(
     fps_limit: int,
     target_size: tuple[int, int],
     box_size: int,
-    pick_tracker_fn,
     tracker_type: str,
     state: dict,
 ):
@@ -97,7 +120,7 @@ def stream_video(
             bbox0 = make_square_bbox(pt, box_size, w, h)
 
             try:
-                state["tracker"] = pick_tracker_fn(tracker_type)
+                state["tracker"] = pick_tracker(tracker_type)
                 state["tracker"].init(frame, bbox0)  # init may return None; ignore
 
                 # Optional sanity check: one immediate update to verify

@@ -3,7 +3,6 @@ from flask import Flask, render_template, make_response
 from flask_socketio import SocketIO
 import cv2
 
-from cv_tracker import pick_tracker
 from util import load_video_thumbnail, load_videos_from_directory, stream_video
 
 tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
@@ -88,7 +87,6 @@ def start_tracking():
             "fps_limit": FPS_LIMIT,
             "target_size": TARGET_SIZE,
             "box_size": BOX_SIZE,
-            "pick_tracker_fn": pick_tracker,
             "tracker_type": tracker_type,
             "state": state,
         },
