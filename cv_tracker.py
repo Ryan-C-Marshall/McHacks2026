@@ -1,6 +1,8 @@
 import cv2
 import sys
 
+FRAME_RESIZE = 8
+
 (major_ver, minor_ver, subminor_ver) = (cv2.__version__).split('.')
 
 if __name__ == '__main__' :
@@ -9,13 +11,13 @@ if __name__ == '__main__' :
     # Instead of MIL, you can also use
  
     tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
-    tracker_type = tracker_types[2]
+    tracker_type = tracker_types[1]
 
     if int(minor_ver) < 3:
         tracker = cv2.Tracker_create(tracker_type)
     else:
         if tracker_type == 'BOOSTING':
-            tracker = cv2.TrackerBoosting_create()
+            tracker = cv2.legacy.TrackerBoosting_create()
         if tracker_type == 'MIL':
             tracker = cv2.TrackerMIL_create()
         if tracker_type == 'KCF':
@@ -32,7 +34,7 @@ if __name__ == '__main__' :
             tracker = cv2.TrackerCSRT_create()
 
     # Read video
-    video = cv2.VideoCapture("echo1.mp4")
+    video = cv2.VideoCapture("videos/Echo/echo1.mp4")
 
     # Exit if video not opened.
     if not video.isOpened():
@@ -41,6 +43,10 @@ if __name__ == '__main__' :
 
     # Read first frame.
     ok, frame = video.read()
+
+    # Resize frame to make it bigger (scale by FRAME_RESIZE)
+    frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
+ 
     if not ok:
         print('Cannot read video file')
         sys.exit()
@@ -54,7 +60,7 @@ if __name__ == '__main__' :
     cv2.resizeWindow('ROI Selector', 1280, 720)
     bbox = cv2.selectROI('ROI Selector', frame, False)
     cv2.destroyWindow('ROI Selector')
- 
+
     # Initialize tracker with first frame and bounding box
     ok = tracker.init(frame, bbox)
     
@@ -65,6 +71,10 @@ if __name__ == '__main__' :
     while True:
         # Read a new frame
         ok, frame = video.read()
+
+        # Resize frame to make it bigger (scale by FRAME_RESIZE)
+        frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
+ 
         if not ok:
             break
         
