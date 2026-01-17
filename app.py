@@ -96,10 +96,10 @@ def start_tracking():
     socketio.emit("status", f"Started streaming: {state['video_path']}")
 
 
-@socketio.on("stop_tracking")
-def stop_tracking():
+@socketio.on("pause_tracking")
+def pause_tracking():
     state["tracking_active"] = False
-    socketio.emit("status", "Stopping...")
+    socketio.emit("status", "Pausing...")
 
 
 if __name__ == "__main__":

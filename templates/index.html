@@ -77,7 +77,7 @@
                   <button
                     type="button"
                     class="btn btn-danger"
-                    id="stopBtn"
+                    id="pauseBtn"
                     disabled
                   >
                     Pause
@@ -125,7 +125,7 @@
       const canvas = document.getElementById("videoCanvas");
       const ctx = canvas.getContext("2d");
       const startBtn = document.getElementById("startBtn");
-      const stopBtn = document.getElementById("stopBtn");
+      const pauseBtn = document.getElementById("pauseBtn");
       const statusDiv = document.getElementById("status");
 
       function setStatus(msg) {
@@ -165,15 +165,15 @@
       startBtn.addEventListener("click", () => {
         socket.emit("start_tracking");
         startBtn.disabled = true;
-        stopBtn.disabled = false;
+        pauseBtn.disabled = false;
         setStatus("Starting...");
       });
 
-      stopBtn.addEventListener("click", () => {
-        socket.emit("stop_tracking");
+      pauseBtn.addEventListener("click", () => {
+        socket.emit("pause_tracking");
         startBtn.disabled = false;
-        stopBtn.disabled = true;
-        setStatus("Stopping...");
+        pauseBtn.disabled = true;
+        setStatus("Pausing...");
       });
 
       // Map click to OpenCV tracking coordinates (TARGET_W x TARGET_H)
