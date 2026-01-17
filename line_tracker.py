@@ -261,32 +261,57 @@ def remove_outliers_ransac(centers, threshold=30):
 
 def draw_smooth_line(frame, centers, color=(0, 255, 0), thickness=2):
     """
-    Draw a smooth spline through the box centers.
+    Draw a smooth curve that passes EXACTLY through all center points.
+    Uses Catmull-Rom spline interpolation.
     """
     if len(centers) < 2:
         return
     
-    if len(centers) < 4:
-        # Not enough points for spline, draw straight lines
-        points = np.array(centers, dtype=np.int32)
-        cv2.polylines(frame, [points], False, color, thickness)
+    centers_array = np.array(centers, dtype=np.float32)
+    
+    if len(centers) == 2:
+        # Just draw a straight line
+        cv2.line(frame, tuple(centers[0]), tuple(centers[1]), color, thickness, cv2.LINE_AA)
         return
     
-    # Use spline for smooth curve
-    centers_array = np.array(centers)
-    x = centers_array[:, 0]
-    y = centers_array[:, 1]
+    if len(centers) == 3:
+        # For 3 points, use Catmull-Rom with duplicated endpoints
+        points = [centers[0], centers[0], centers[1], centers[2], centers[2]]
+    else:
+        # For 4+ points, duplicate first and last for proper end behavior
+        points = [centers[0]] + centers + [centers[-1]]
     
-    try:
-        tck, u = splprep([x, y], s=0, k=min(3, len(centers)-1))
-        u_fine = np.linspace(0, 1, len(centers) * 10)
-        x_fine, y_fine = splev(u_fine, tck)
-        points = np.column_stack([x_fine, y_fine]).astype(np.int32)
-        cv2.polylines(frame, [points], False, color, thickness)
-    except:
-        # Fall back to straight lines if spline fails
-        points = np.array(centers, dtype=np.int32)
-        cv2.polylines(frame, [points], False, color, thickness)
+    curve_points = []
+    
+    # Catmull-Rom spline - guarantees passing through all control points
+    for i in range(1, len(points) - 2):
+        p0 = np.array(points[i-1], dtype=np.float32)
+        p1 = np.array(points[i], dtype=np.float32)
+        p2 = np.array(points[i+1], dtype=np.float32)
+        p3 = np.array(points[i+2], dtype=np.float32)
+        
+        # Generate points along this segment
+        num_points = 30  # More = smoother
+        for t in np.linspace(0, 1, num_points, endpoint=(i == len(points) - 3)):
+            t2 = t * t
+            t3 = t2 * t
+            
+            # Catmull-Rom formula (guaranteed to pass through p1 and p2)
+            point = 0.5 * (
+                (2 * p1) +
+                (-p0 + p2) * t +
+                (2*p0 - 5*p1 + 4*p2 - p3) * t2 +
+                (-p0 + 3*p1 - 3*p2 + p3) * t3
+            )
+            curve_points.append(point.astype(np.int32))
+    
+    if curve_points:
+        curve_points = np.array(curve_points)
+        cv2.polylines(frame, [curve_points], False, color, thickness, cv2.LINE_AA)
+    else:
+        # Fallback
+        points_array = np.array(centers, dtype=np.int32)
+        cv2.polylines(frame, [points_array], False, color, thickness, cv2.LINE_AA)
 
 
 if __name__ == '__main__':
