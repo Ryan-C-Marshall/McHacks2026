@@ -144,6 +144,8 @@ if __name__ == '__main__':
 
         
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
+
+        
         
         if ok1:
             # Draw bounding box from tracker 1
@@ -156,6 +158,7 @@ if __name__ == '__main__':
             cv2.putText(frame, f"{tracker_type1}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
         
         elif ok2 and contains(bbox1, bbox2) and not_wider(bbox1, bbox2):
+            print(f"bbox1 = {bbox1}")
             # Draw bounding box from tracker 2
             p2_1 = (int(bbox2[0]), int(bbox2[1]))
             p2_2 = (int(bbox2[0] + bbox2[2]), int(bbox2[1] + bbox2[3]))

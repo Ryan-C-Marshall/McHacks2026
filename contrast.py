@@ -6,7 +6,7 @@ import numpy as np
 
 FRAME_RESIZE = 8
 BRIGHTNESS = 2
-CONTRAST = 0
+CONTRAST = 10
 
 (major_ver, minor_ver, subminor_ver) = (cv2.__version__).split('.')
 
@@ -69,13 +69,13 @@ if __name__ == '__main__' :
         sys.exit()
 
     # Define an initial bounding box
-    bbox = (315, 397, 265, 150)
+    bbox = (596, 517, 165, 105)
 
     # Uncomment the line below to select a different bounding box
     # Create a large window for ROI selection
     cv2.namedWindow('ROI Selector', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('ROI Selector', 1280, 720)
-    bbox = cv2.selectROI('ROI Selector', frame, False)
+    # bbox = cv2.selectROI('ROI Selector', frame, False)
     print(bbox)
     cv2.destroyWindow('ROI Selector')
 
