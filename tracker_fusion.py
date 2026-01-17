@@ -1,5 +1,6 @@
 import cv2
 import sys
+from kcf_to_csrt import contains
 
 FRAME_RESIZE = 8
 
@@ -19,9 +20,15 @@ def draw_tracked_boxes(frame, trackers_data):
     Returns:
         frame: Frame with drawn boxes
     """
+    
+
+    for t in trackers_data:
+        for j in trackers_data:
+            if t != j and t['ok'] and j['ok'] and not(contains(t['bbox'], j['bbox'])):
+                j['ok'] = False
+    
     # Filter successful trackers
     successful = [t for t in trackers_data if t['ok']]
-    
     if not successful:
         # No tracking success at all
         cv2.putText(frame, "Tracking failure detected", (50, 80), 
@@ -33,7 +40,7 @@ def draw_tracked_boxes(frame, trackers_data):
     names = [t['name'] for t in successful]
     
     if 'KCF' in names:
-        # KCF gets 70%, distribute remaining 30%
+        # KCF gets 80%, distribute remaining 20%
         remaining = 0.20
         for t in successful:
             if t['name'] == 'KCF':
