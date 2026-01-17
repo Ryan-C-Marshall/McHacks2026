@@ -34,7 +34,7 @@ if __name__ == '__main__' :
     # Instead of MIL, you can also use
  
     tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
-    tracker_type = tracker_types[7]
+    tracker_type = tracker_types[4]
 
     if int(minor_ver) < 3:
         tracker = cv2.Tracker_create(tracker_type)
@@ -48,7 +48,7 @@ if __name__ == '__main__' :
         if tracker_type == 'TLD':
             tracker = cv2.TrackerTLD_create()
         if tracker_type == 'MEDIANFLOW':
-            tracker = cv2.TrackerMedianFlow_create()
+            tracker = cv2.legacy.TrackerMedianFlow_create()
         if tracker_type == 'GOTURN':
             tracker = cv2.TrackerGOTURN_create()
         if tracker_type == 'MOSSE':
