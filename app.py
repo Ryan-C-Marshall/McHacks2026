@@ -1,19 +1,27 @@
-from flask import Flask, render_template
-from flask_socketio import SocketIO, emit
+import os
 import cv2
 import base64
 import threading
-import time
+from flask import Flask, render_template
+from flask_socketio import SocketIO
+
+VIDEO_PATH = "echo1.mp4"
+FPS_LIMIT = 30
+
+BOX_SIZE = 100
+tracker_type = "CSRT"   # or "MEDIANFLOW", etc.
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Global variables for tracking
-tracking_thread = None
-stop_tracking = False
+tracking_active = False
+stream_thread = None
 
-FRAME_RESIZE = 8
-BOX_SIZE = 100
+# --- tracker state ---
+clicked_pt = None
+tracker = None
+tracker_inited = False
+
 
 def make_square_bbox(center, box_size, w, h):
     cx, cy = center
@@ -24,91 +32,113 @@ def make_square_bbox(center, box_size, w, h):
     y = max(0, min(y, h - box_size))
     return (x, y, int(box_size), int(box_size))
 
-def track_and_emit(video_path):
-    global stop_tracking
-    tracker_types = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
-    tracker_type = tracker_types[7]
 
-    if int(cv2.__version__.split('.')[1]) < 3:
-        tracker = cv2.Tracker_create(tracker_type)
-    else:
-        if tracker_type == 'CSRT':
-            tracker = cv2.TrackerCSRT_create()
+def create_tracker(tracker_type: str):
+    # Note: CSRT/KCF/etc may require opencv-contrib-python, depending on your install.
+    if tracker_type == "CSRT":
+        return cv2.TrackerCSRT_create()
+    if tracker_type == "KCF":
+        return cv2.TrackerKCF_create()
+    if tracker_type == "MIL":
+        return cv2.TrackerMIL_create()
+    if tracker_type == "MOSSE":
+        return cv2.TrackerMOSSE_create()
+    # MedianFlow is under legacy in many builds
+    if tracker_type == "MEDIANFLOW":
+        return cv2.legacy.TrackerMedianFlow_create()
 
-    video = cv2.VideoCapture(video_path)
-    if not video.isOpened():
-        socketio.emit('status', 'Could not open video')
-        return
+    raise ValueError(f"Unsupported tracker_type: {tracker_type}")
 
-    ok, frame = video.read()
-    if not ok:
-        socketio.emit('status', 'Cannot read video file')
-        return
 
-    frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
-    h, w = frame.shape[:2]
-
-    # Use a fixed center for simplicity (you can modify to accept from frontend)
-    center = (w // 2, h // 2)  # Center of frame
-    bbox = make_square_bbox(center, BOX_SIZE, w, h)
-
-    ok = tracker.init(frame, bbox)
-    if not ok:
-        socketio.emit('status', 'Tracker initialization failed')
-        return
-
-    socketio.emit('status', 'Tracking started')
-
-    while not stop_tracking:
-        ok, frame = video.read()
-        if not ok:
-            break
-
-        frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
-
-        timer = cv2.getTickCount()
-        ok, bbox = tracker.update(frame)
-        fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
-
-        if ok:
-            x, y, bw, bh = bbox
-            cx = int(x + bw / 2)
-            cy = int(y + bh / 2)
-            cv2.drawMarker(frame, (cx, cy), (0, 255, 0), markerType=cv2.MARKER_CROSS, markerSize=14, thickness=2)
-        else:
-            cv2.putText(frame, "Tracking failure detected", (0, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-
-        cv2.putText(frame, tracker_type + " Tracker", (0, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2)
-        cv2.putText(frame, "FPS : " + str(int(fps)), (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2)
-
-        # Encode frame to base64
-        _, buffer = cv2.imencode('.jpg', frame)
-        frame_base64 = base64.b64encode(buffer).decode('utf-8')
-        socketio.emit('frame', frame_base64)
-
-        time.sleep(0.05)  # Adjust for frame rate
-
-    video.release()
-    socketio.emit('status', 'Tracking stopped')
-
-@app.route('/')
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return render_template("index.html")
 
-@socketio.on('start_tracking')
-def handle_start_tracking():
-    global tracking_thread, stop_tracking
-    if tracking_thread and tracking_thread.is_alive():
+
+@socketio.on("select_point")
+def on_select_point(data):
+    global clicked_pt, tracker_inited, tracker
+    clicked_pt = (int(data["x"]), int(data["y"]))
+    tracker_inited = False
+    tracker = None
+    socketio.emit("status", f"Point received: {clicked_pt}. Tracker will initialize on next frame.")
+
+
+def stream_video():
+    global tracking_active, tracker, tracker_inited, clicked_pt
+
+    cap = cv2.VideoCapture(VIDEO_PATH)
+    if not cap.isOpened():
+        socketio.emit("status", "Error: Cannot open video")
         return
-    stop_tracking = False
-    video_path = "videos/Echo/echo1.mp4"  # Hardcoded for now
-    tracking_thread = threading.Thread(target=track_and_emit, args=(video_path,))
-    tracking_thread.start()
 
-@socketio.on('stop_tracking')
-def handle_stop_tracking():
-    global stop_tracking
-    stop_tracking = True
+    socketio.emit("status", "Streaming started (click the video to select ROI center)")
 
-if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    while tracking_active:
+        ret, frame = cap.read()
+        if not ret:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            continue
+
+        # Optional: choose a fixed output size (or keep native)
+        TARGET_W, TARGET_H = 640, 480
+        frame = cv2.resize(frame, (TARGET_W, TARGET_H), interpolation=cv2.INTER_LINEAR)
+
+        h, w = frame.shape[:2]
+
+        # Initialize tracker once we have a click
+        if (clicked_pt is not None) and (not tracker_inited):
+            # If your click comes in at different scale than the frame, you must scale it here.
+            bbox = make_square_bbox(clicked_pt, BOX_SIZE, w, h)
+            tracker = create_tracker(tracker_type)
+            tracker.init(frame, bbox)
+            tracker_inited = True
+            socketio.emit("status", f"Tracker initialized using {tracker_type}")
+
+        # Update tracker if initialized
+        if tracker_inited and tracker is not None:
+            ok, bbox = tracker.update(frame)
+            if ok:
+                x, y, bw, bh = bbox
+                cx = int(x + bw / 2)
+                cy = int(y + bh / 2)
+                cv2.drawMarker(
+                    frame, (cx, cy), (0, 255, 0),
+                    markerType=cv2.MARKER_CROSS, markerSize=14, thickness=2
+                )
+            else:
+                cv2.putText(frame, "Tracking failure", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+            cv2.putText(frame, f"{tracker_type} Tracker", (10, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2)
+
+        # Encode and emit frame
+        ok_jpg, buffer = cv2.imencode(".jpg", frame)
+        if ok_jpg:
+            frame_b64 = base64.b64encode(buffer).decode("utf-8")
+            socketio.emit("frame", frame_b64)
+
+        socketio.sleep(1 / FPS_LIMIT)
+
+    cap.release()
+    socketio.emit("status", "Streaming stopped")
+
+
+@socketio.on("start_tracking")
+def start_tracking():
+    global tracking_active, stream_thread
+    if not tracking_active:
+        tracking_active = True
+        stream_thread = threading.Thread(target=stream_video, daemon=True)
+        stream_thread.start()
+
+
+@socketio.on("stop_tracking")
+def stop_tracking():
+    global tracking_active
+    tracking_active = False
+
+
+if __name__ == "__main__":
+    socketio.run(app, host="0.0.0.0", port=5001, debug=True)

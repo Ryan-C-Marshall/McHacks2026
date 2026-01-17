@@ -28,33 +28,36 @@ def make_square_bbox(center, box_size, w, h):
 
     return (x, y, int(box_size), int(box_size))
 
+def pick_tracker(num):
+    tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
+    tracker_type = tracker_types[num]
+
+    if int(minor_ver) < 3:
+        return cv2.Tracker_create(tracker_type)
+    else:
+        if tracker_type == 'BOOSTING':
+            return cv2.legacy.TrackerBoosting_create()
+        if tracker_type == 'MIL':
+            return cv2.TrackerMIL_create()
+        if tracker_type == 'KCF':
+            return cv2.TrackerKCF_create()
+        if tracker_type == 'TLD':
+            return cv2.TrackerTLD_create()
+        if tracker_type == 'MEDIANFLOW':
+            return cv2.legacy.TrackerMedianFlow_create()
+        if tracker_type == 'GOTURN':
+            return cv2.TrackerGOTURN_create()
+        if tracker_type == 'MOSSE':
+            return cv2.TrackerMOSSE_create()
+        if tracker_type == "CSRT":
+            return cv2.TrackerCSRT_create()
+
 if __name__ == '__main__' :
  
     # Set up tracker.
     # Instead of MIL, you can also use
  
-    tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
-    tracker_type = tracker_types[4]
-
-    if int(minor_ver) < 3:
-        tracker = cv2.Tracker_create(tracker_type)
-    else:
-        if tracker_type == 'BOOSTING':
-            tracker = cv2.legacy.TrackerBoosting_create()
-        if tracker_type == 'MIL':
-            tracker = cv2.TrackerMIL_create()
-        if tracker_type == 'KCF':
-            tracker = cv2.TrackerKCF_create()
-        if tracker_type == 'TLD':
-            tracker = cv2.TrackerTLD_create()
-        if tracker_type == 'MEDIANFLOW':
-            tracker = cv2.legacy.TrackerMedianFlow_create()
-        if tracker_type == 'GOTURN':
-            tracker = cv2.TrackerGOTURN_create()
-        if tracker_type == 'MOSSE':
-            tracker = cv2.TrackerMOSSE_create()
-        if tracker_type == "CSRT":
-            tracker = cv2.TrackerCSRT_create()
+    tracker = pick_tracker(7)
 
     # Read video
     video = cv2.VideoCapture("videos/Echo/echo1.mp4")
