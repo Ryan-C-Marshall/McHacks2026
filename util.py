@@ -1,6 +1,8 @@
 import cv2
 import base64
 
+DEFAULT_VIDEO_PATH = "videos/Echo/echo1.mp4"
+
 (major_ver, minor_ver, subminor_ver) = (cv2.__version__).split('.')
 
 def pick_tracker(tracker_type):
@@ -74,13 +76,13 @@ def make_square_bbox(center, box_size, w, h):
 
 def stream_video(
     socketio,
-    video_path: str,
     fps_limit: int,
     target_size: tuple[int, int],
     box_size: int,
     tracker_type: str,
     state: dict,
 ):
+    video_path = state.get("video_path", DEFAULT_VIDEO_PATH)
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         socketio.emit("status", f"Error: Cannot open video: {video_path}")

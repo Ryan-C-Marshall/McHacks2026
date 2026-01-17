@@ -1,13 +1,12 @@
 import threading
-from flask import Flask, render_template, make_response
+from flask import Flask, render_template, make_response, request
 from flask_socketio import SocketIO
 import cv2
 
-from util import load_video_thumbnail, load_videos_from_directory, stream_video
+from util import load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH
 
 tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 
-VIDEO_PATH = "echo1.mp4"
 FPS_LIMIT = 30
 TARGET_SIZE = (640, 480)
 
@@ -26,6 +25,7 @@ state = {
     "tracker_inited": False,
     "show_bbox": True,
     "resume_frame": 0,
+    "video_path": DEFAULT_VIDEO_PATH,
 }
 
 stream_thread = None
@@ -33,6 +33,8 @@ stream_thread = None
 
 @app.route("/")
 def index():
+    state["video_path"] = request.args.get("video", DEFAULT_VIDEO_PATH)
+
     return render_template("index.html")
 
 
@@ -77,13 +79,11 @@ def start_tracking():
     state["tracking_active"] = True
 
     # If you want to use the landing page selection later, pass that path instead.
-    video_path = "videos/Echo/echo1.mp4"
 
     stream_thread = threading.Thread(
         target=stream_video,
         kwargs={
             "socketio": socketio,
-            "video_path": video_path,
             "fps_limit": FPS_LIMIT,
             "target_size": TARGET_SIZE,
             "box_size": BOX_SIZE,
@@ -93,7 +93,7 @@ def start_tracking():
         daemon=True,
     )
     stream_thread.start()
-    socketio.emit("status", f"Started streaming: {video_path}")
+    socketio.emit("status", f"Started streaming: {state['video_path']}")
 
 
 @socketio.on("stop_tracking")
