@@ -16,6 +16,8 @@ BOX_SIZE = 100
 tracker_num = 1
 tracker_type = tracker_types[tracker_num]
 
+show_bbox = True
+
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -98,6 +100,8 @@ def stream_video():
                     frame, (cx, cy), (0, 255, 0),
                     markerType=cv2.MARKER_CROSS, markerSize=14, thickness=2
                 )
+                if show_bbox:
+                    cv2.rectangle(frame, (int(x), int(y)), (int(x + bw), int(y + bh)), (0, 255, 0), 2)
             else:
                 cv2.putText(frame, "Tracking failure", (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
@@ -160,6 +164,12 @@ def start_tracking():
 def stop_tracking():
     global tracking_active
     tracking_active = False
+
+@socketio.on("toggle_bbox")
+def on_toggle_bbox(data):
+    global show_bbox
+    show_bbox = bool(data.get("show", True))
+    socketio.emit("status", f"Show bbox: {show_bbox}")
 
 
 if __name__ == "__main__":
