@@ -48,15 +48,15 @@
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-2">
             {% for video in videos %}
             <div class="col">
-              <div>
-                <div class="card video-card h-100">
-                    <a href="/"><img src="/thumbnail/{{ video.path }}" class="card-img-top" alt="Thumbnail"></a>
-                    <div class="card-body">
-                        <h5 class="card-title">{{ video.title }}</h5>
-                        <p class="card-text">{{ video.desc }}</p>
-                    </div>
-                </div>
-              </div>
+                <a href="/?video={{ video.path }}" class="text-decoration-none">
+                  <div class="card video-card h-100">
+                      <img src="/thumbnail/{{ video.path }}" class="card-img-top" alt="Thumbnail">
+                      <div class="card-body">
+                          <h5 class="card-title">{{ video.title }}</h5>
+                          <p class="card-text">{{ video.desc }}</p>
+                      </div>
+                  </div>
+                </a>
             </div>
             {% endfor %}
         </div>
