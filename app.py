@@ -4,9 +4,8 @@ from flask_socketio import SocketIO, emit
 import cv2
 import base64
 import threading
-from flask import Flask, render_template
-from flask_socketio import SocketIO
 from cv_tracker import pick_tracker
+from util import load_video_thumbnail, load_videos_from_directory
 
 tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 
