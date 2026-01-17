@@ -1,4 +1,6 @@
 import os
+from flask import Flask, render_template, send_file, make_response
+from flask_socketio import SocketIO, emit
 import cv2
 import base64
 import threading
@@ -117,8 +119,35 @@ def stream_video():
 
     cap.release()
     socketio.emit("status", "Streaming stopped")
+def track_and_emit(video_path):
+    pass
 
 
+@app.route('/landing')
+def landing():
+    videos = load_videos_from_directory()
+    return render_template('landing_page.html', videos=videos)
+
+@app.route('/thumbnail/<path:video_path>')
+def thumbnail(video_path):
+    frame = load_video_thumbnail(video_path)
+    if frame is None:
+        return "Error loading thumbnail", 404
+    _, buffer = cv2.imencode('.jpg', frame)
+    response = make_response(buffer.tobytes())
+    response.headers['Content-Type'] = 'image/jpeg'
+    return response
+
+@socketio.on('start_tracking')
+def handle_start_tracking():
+    global tracking_thread, stop_tracking
+    if tracking_thread and tracking_thread.is_alive():
+        return
+    stop_tracking = False
+    video_path = "videos/Echo/echo1.mp4"  # Hardcoded for now
+    tracking_thread = threading.Thread(target=track_and_emit, args=(video_path,))
+    tracking_thread.start()
+    print("Started tracking thread.")
 @socketio.on("start_tracking")
 def start_tracking():
     global tracking_active, stream_thread
