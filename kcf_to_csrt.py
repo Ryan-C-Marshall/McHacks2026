@@ -1,24 +1,43 @@
 import cv2
 import sys
 
+from polars import col
+
 FRAME_RESIZE = 8
 
+ALLOWANCE = 1.0  # Allowance for center point to be near edges
+SIZE_ALLOWANCE = 1.5  # Allowance for width comparison
 
 
-def contains(box_1, box_2):
-    # Check if center of box_2 is inside box_1
+
+def contains(box_1, box_2, allowance=ALLOWANCE):
+    # Check if center of box_2 is inside box_1 with optional allowance
     x1_1, y1_1, w1, h1 = box_1
     x2_1, y2_1, w2, h2 = box_2
+
+    allowance = w1 * allowance  # Convert allowance to pixels based on width of box_1
     
     # Calculate center of box_2
     center_x = x2_1 + w2 / 2
     center_y = y2_1 + h2 / 2
     
-    # Check if center is inside box_1
-    if (x1_1 <= center_x <= x1_1 + w1) and (y1_1 <= center_y <= y1_1 + h1):
+    # Check if center is inside box_1 with allowance (margin tolerance)
+    if (x1_1 - allowance <= center_x <= x1_1 + w1 + allowance) and (y1_1 - allowance <= center_y <= y1_1 + h1 + allowance):
         return True
     return False
 
+
+def not_wider(box_1, box_2, size_allowance=SIZE_ALLOWANCE):
+    # Check if box_2 is wider than box_1 by a factor of width_allowance
+    x1_1, y1_1, w1, h1 = box_1
+    x2_1, y2_1, w2, h2 = box_2
+
+    width_allowance = w1 * size_allowance  # Convert allowance to pixels based on width of box_1
+    height_allowance = h1 * size_allowance  # Convert allowance to pixels based on height of box_1
+
+    if w2 > width_allowance or h2 > height_allowance:
+        return False
+    return True
 
 def test_tester():
     """Test cases for the tester function"""
@@ -69,11 +88,27 @@ if __name__ == '__main__':
         print('Cannot read video file')
         sys.exit()
     
-    # Select ROI
+    # Ask user if they want to select ROI manually
+    message = "Press 'y' for manual ROI selection, 'n' to use default"
+    cv2.putText(frame, f"{message}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+
     cv2.namedWindow('ROI Selector', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('ROI Selector', 1280, 720)
-    bbox = (448, 475, 87, 105)
-    bbox = cv2.selectROI('ROI Selector', frame, False)
+
+    bbox = (596, 535, 157, 114)
+    p1_1 = (int(bbox[0]), int(bbox[1]))
+    p1_2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
+    cv2.rectangle(frame, p1_1, p1_2, (255, 0, 0), 2, 1)
+    cv2.imshow('ROI Selector', frame)
+
+    key = cv2.waitKey(0) & 0xff
+    x = (key == ord('y'))  # x is True if 'y' is pressed, False otherwise
+    
+
+
+
+    if x:
+        bbox = cv2.selectROI('ROI Selector', frame, False)
     print(bbox)
     cv2.destroyWindow('ROI Selector')
     
@@ -97,9 +132,15 @@ if __name__ == '__main__':
         timer = cv2.getTickCount()
         
         # Update trackers
-        ok1, bbox1 = tracker1.update(frame)
-        ok2, bbox2 = tracker2.update(frame)
-        ok3, bbox3 = tracker3.update(frame)
+        ok1, dummy1 = tracker1.update(frame)
+        if ok1:
+            bbox1 = dummy1
+        ok2, dummy2 = tracker2.update(frame)
+        if ok2:
+            bbox2 = dummy2
+        ok3, dummy3 = tracker3.update(frame)
+        if ok3:
+            bbox3 = dummy3
 
         
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
@@ -109,19 +150,24 @@ if __name__ == '__main__':
             p1_1 = (int(bbox1[0]), int(bbox1[1]))
             p1_2 = (int(bbox1[0] + bbox1[2]), int(bbox1[1] + bbox1[3]))
             cv2.rectangle(frame, p1_1, p1_2, (255, 0, 0), 2, 1)
+    
+
 
             cv2.putText(frame, f"{tracker_type1}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
         
-        elif ok2:
+        elif ok2 and contains(bbox1, bbox2) and not_wider(bbox1, bbox2):
             # Draw bounding box from tracker 2
             p2_1 = (int(bbox2[0]), int(bbox2[1]))
             p2_2 = (int(bbox2[0] + bbox2[2]), int(bbox2[1] + bbox2[3]))
             cv2.rectangle(frame, p2_1, p2_2, (0, 255, 0), 2, 1)
+
+
             cv2.putText(frame, f"{tracker_type2}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
 
-        
-        elif ok3:
+
+
+        elif ok3 and contains(bbox2, bbox3) and not_wider(bbox2, bbox3):
             # Draw bounding box from tracker 3
             p3_1 = (int(bbox3[0]), int(bbox3[1]))
             p3_2 = (int(bbox3[0] + bbox3[2]), int(bbox3[1] + bbox3[3]))
@@ -133,6 +179,21 @@ if __name__ == '__main__':
             cv2.putText(frame, "Tracking failure detected", (10, 30), 
             cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
 
+            p1_1 = (int(bbox1[0]), int(bbox1[1]))
+            p1_2 = (int(bbox1[0] + bbox1[2]), int(bbox1[1] + bbox1[3]))
+            cv2.rectangle(frame, p1_1, p1_2, (255, 0, 0), 2, 1)
+
+            p2_1 = (int(bbox2[0]), int(bbox2[1]))
+            p2_2 = (int(bbox2[0] + bbox2[2]), int(bbox2[1] + bbox2[3]))
+            cv2.rectangle(frame, p2_1, p2_2, (0, 255, 0), 2, 1)
+
+
+            p3_1 = (int(bbox3[0]), int(bbox3[1]))
+            p3_2 = (int(bbox3[0] + bbox3[2]), int(bbox3[1] + bbox3[3]))
+            cv2.rectangle(frame, p3_1, p3_2, (0, 0, 255), 2, 1)
+
+
+
         
         
         # Display info
@@ -142,7 +203,7 @@ if __name__ == '__main__':
         cv2.putText(frame, f"FPS : {int(fps)}", (10, 60), 
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (204, 0, 204), 2)
 
-        cv2.putText(frame, f"Box: {contains(bbox1, bbox2)})", (10, 90), 
+        cv2.putText(frame, f"Box12, Box23, width12, width23: {contains(bbox1, bbox2), contains(bbox2, bbox3), not_wider(bbox1, bbox2), not_wider(bbox2, bbox3)}", (10, 90), 
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (204, 0, 204), 2)
         
         cv2.imshow("Tracking", frame)
