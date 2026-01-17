@@ -95,15 +95,14 @@ def stream_video(
     resume_frame = int(state.get("resume_frame", 0) or 0)
     if resume_frame > 0:
         cap.set(cv2.CAP_PROP_POS_FRAMES, resume_frame)
-        socketio.emit("status", f"Resuming at frame {resume_frame} (click to set ROI if needed)")
+        socketio.emit("status", f"Streaming resumed")
     else:
-        socketio.emit("status", "Streaming started (click the video to select ROI center)")
+        socketio.emit("status", "Streaming started")
 
     while state["tracking_active"]:
         ret, frame = cap.read()
 
         if not ret or frame is None:
-            socketio.emit("status", "Reached end of video.")
             state["tracking_active"] = False
             break
 
@@ -128,11 +127,6 @@ def stream_video(
                 # Optional sanity check: one immediate update to verify
                 ok_init, _ = state["tracker"].update(frame)
                 state["tracker_inited"] = bool(ok_init)
-
-                socketio.emit(
-                    "status",
-                    f"Tracker init attempted using {tracker_type}. First update ok={state['tracker_inited']}."
-                )
 
                 if not state["tracker_inited"]:
                     state["tracker"] = None

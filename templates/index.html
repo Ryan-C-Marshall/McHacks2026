@@ -189,7 +189,6 @@
         const trackY = Math.round((cssY / rect.height) * TARGET_H);
 
         socket.emit("select_point", { x: trackX, y: trackY });
-        setStatus(`Point selected: (${trackX}, ${trackY})`);
       });
 
       const bboxToggle = document.getElementById("bboxToggle");
