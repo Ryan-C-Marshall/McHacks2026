@@ -4,12 +4,16 @@ import base64
 import threading
 from flask import Flask, render_template
 from flask_socketio import SocketIO
+from cv_tracker import pick_tracker
+
+tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 
 VIDEO_PATH = "echo1.mp4"
 FPS_LIMIT = 30
 
 BOX_SIZE = 100
-tracker_type = "CSRT"   # or "MEDIANFLOW", etc.
+tracker_num = 1
+tracker_type = tracker_types[tracker_num]
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -31,23 +35,6 @@ def make_square_bbox(center, box_size, w, h):
     x = max(0, min(x, w - box_size))
     y = max(0, min(y, h - box_size))
     return (x, y, int(box_size), int(box_size))
-
-
-def create_tracker(tracker_type: str):
-    # Note: CSRT/KCF/etc may require opencv-contrib-python, depending on your install.
-    if tracker_type == "CSRT":
-        return cv2.TrackerCSRT_create()
-    if tracker_type == "KCF":
-        return cv2.TrackerKCF_create()
-    if tracker_type == "MIL":
-        return cv2.TrackerMIL_create()
-    if tracker_type == "MOSSE":
-        return cv2.TrackerMOSSE_create()
-    # MedianFlow is under legacy in many builds
-    if tracker_type == "MEDIANFLOW":
-        return cv2.legacy.TrackerMedianFlow_create()
-
-    raise ValueError(f"Unsupported tracker_type: {tracker_type}")
 
 
 @app.route("/")
@@ -90,14 +77,18 @@ def stream_video():
         if (clicked_pt is not None) and (not tracker_inited):
             # If your click comes in at different scale than the frame, you must scale it here.
             bbox = make_square_bbox(clicked_pt, BOX_SIZE, w, h)
-            tracker = create_tracker(tracker_type)
+            tracker = pick_tracker(tracker_type)
             tracker.init(frame, bbox)
             tracker_inited = True
             socketio.emit("status", f"Tracker initialized using {tracker_type}")
 
         # Update tracker if initialized
         if tracker_inited and tracker is not None:
+            timer = cv2.getTickCount()
+
             ok, bbox = tracker.update(frame)
+
+            fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer);
             if ok:
                 x, y, bw, bh = bbox
                 cx = int(x + bw / 2)
@@ -110,8 +101,11 @@ def stream_video():
                 cv2.putText(frame, "Tracking failure", (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-            cv2.putText(frame, f"{tracker_type} Tracker", (10, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2)
+             # Display tracker type on frame
+            cv2.putText(frame, tracker_type + " Tracker", (0,20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50,170,50),2);
+        
+            # Display FPS on frame
+            cv2.putText(frame, "FPS : " + str(int(fps)), (0,50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50,170,50), 2);
 
         # Encode and emit frame
         ok_jpg, buffer = cv2.imencode(".jpg", frame)

@@ -28,9 +28,7 @@ def make_square_bbox(center, box_size, w, h):
 
     return (x, y, int(box_size), int(box_size))
 
-def pick_tracker(num):
-    tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
-    tracker_type = tracker_types[num]
+def pick_tracker(tracker_type):
 
     if int(minor_ver) < 3:
         return cv2.Tracker_create(tracker_type)
@@ -56,8 +54,11 @@ if __name__ == '__main__' :
  
     # Set up tracker.
     # Instead of MIL, you can also use
+
+    tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
+    tracker_type = tracker_types[7]
  
-    tracker = pick_tracker(7)
+    tracker = pick_tracker(tracker_type)
 
     # Read video
     video = cv2.VideoCapture("videos/Echo/echo1.mp4")
