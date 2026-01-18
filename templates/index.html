@@ -113,6 +113,7 @@
                           id="startBtn"
                           title="Play"
                           aria-label="Play"
+                          disabled
                         >
                           <svg
                             viewBox="0 0 24 24"
@@ -130,7 +131,6 @@
                           id="pauseBtn"
                           title="Pause"
                           aria-label="Pause"
-                          disabled
                         >
                           <svg
                             viewBox="0 0 24 24"
@@ -517,7 +517,7 @@
         setStatus(`Deleted tracker ${idx}`);
       });
 
-      socket.on("disconnect", () => {
+      socket.on("connect", () => {
         socket.emit("end_thread");
       });
     </script>

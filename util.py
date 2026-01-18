@@ -64,7 +64,6 @@ def load_videos_from_directory(directory_path='videos/'):
                 desc = "Description for " + title
                 video_list.append({'title': title, 'desc': desc, 'path': video_path})
 
-    print("Loaded videos:", video_list)
     return video_list
 
 
@@ -207,7 +206,8 @@ def stream_video(
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         socketio.emit("status", f"Error: Cannot open video: {video_path}")
-        state["paused"] = False
+        with STATE_LOCK:
+            state["paused"] = False
         return
 
     target_w, target_h = target_size
@@ -224,6 +224,8 @@ def stream_video(
     ret, frame = cap.read()
 
     while True:
+        with STATE_LOCK:
+            state["streaming_video"] = True
 
         if(not state.get("tracking_active")):
             break
@@ -245,7 +247,8 @@ def stream_video(
         # Initialize tracker on a click
         if state.get("clicked_pt") is not None:
             create_new_tracker(state, tracker_type, box_size, frame, socketio)
-            state["clicked_pt"] = None  # consume click
+            with STATE_LOCK:
+                state["clicked_pt"] = None  # consume click
 
         # Update trackers (if initialized)
         with STATE_LOCK:
@@ -261,6 +264,10 @@ def stream_video(
             socketio.emit("frame", frame_b64)
 
         socketio.sleep(1 / fps_limit)
-
+    
+    print("Releasing video capture...")
     cap.release()
     socketio.emit("status", "Streaming stopped")
+    with STATE_LOCK:
+        state["streaming_video"] = False
+        

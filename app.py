@@ -22,6 +22,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # One shared state object for util.stream_video
 state = {
     "tracking_active": False,
+    "streaming_video": False,
     "paused": False,
     "clicked_pt": None,
     "trackers": [],     # tracker, tracker_inited
@@ -51,7 +52,18 @@ def landing():
 
 @app.route("/index")
 def index():
+    print("Loading index page...")
 
+    # end any existing tracking thread
+    with STATE_LOCK:
+        state["tracking_active"] = False
+    while state.get("streaming_video", True):
+        # wait for streaming to stop
+        continue
+
+    socketio.emit("status", "Ending tracking thread...")
+
+    # start the new tracking session
     with STATE_LOCK:
         state["trackers"] = []
         state["clicked_pt"] = None
@@ -173,11 +185,17 @@ def handle_add_arrow(data):
 
     socketio.emit("status", f"Added arrow to tracker {idx}")
 
-@socketio.on("end_thread")
-def handle_end_thread():
-    with STATE_LOCK:
-        state["tracking_active"] = False
-    socketio.emit("status", "Ending tracking thread...")
+# @socketio.on("end_thread")
+# def handle_end_thread():
+#     print("Handling end_thread...")
+
+#     with STATE_LOCK:
+#         state["tracking_active"] = False
+#     while state.get("streaming_video", True):
+#         # wait for streaming to stop
+#         continue
+
+#     socketio.emit("status", "Ending tracking thread...")
 
 
 if __name__ == "__main__":
