@@ -3,7 +3,7 @@ from flask import Flask, render_template, make_response, request
 from flask_socketio import SocketIO
 import cv2
 
-from util import load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH, delete_tracker, STATE_LOCK, add_arrow_to_tracker, add_text_to_tracker, Tracker
+from util import BoxTracker, load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH, delete_tracker, STATE_LOCK, add_arrow_to_tracker, add_text_to_tracker, Tracker, PolygonTracker
 
 tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 
@@ -26,7 +26,7 @@ state = {
     "create_new_tracker_type": None, # "BOX", "LINE", "POLYGON"
     "add_point_to_polygon_tracker": None, # (tracker_idx, (x,y))
     "trackers": [],     # tracker, tracker_inited
-    "show_bbox": True,
+    "show_bbox": False,
     "resume_frame": 0,
     "video_path": None,
     "ensemble_types": ["KCF", "CSRT", "MEDIANFLOW"],
@@ -36,13 +36,30 @@ stream_thread = None
 
 def _bbox_offsets_from_abs_click(tracker_obj: Tracker, x: int, y: int):
     """Convert absolute frame coords (x,y) to offsets relative to latest bbox.
-    Returns (dx, dy) or None if bbox not available.
+    Returns {"closest_tracker_index": index, "offsets": (dx, dy)} or None if bbox not available.
     """
-    bbox = tracker_obj.last_bbox
-    if not bbox:
-        return None
-    bx, by, bw, bh = bbox
-    return (int(x - bx), int(y - by))
+    if isinstance(tracker_obj, PolygonTracker):
+        min_dist = float('inf')
+        closest_idx = -1
+        for i, point in enumerate(tracker_obj.points):
+            bx, by, bw, bh = point.last_bbox
+            cx = bx + bw / 2
+            cy = by + bh / 2
+            dist = (x - cx)**2 + (y - cy)**2
+            if dist < min_dist:
+                min_dist = dist
+                closest_idx = i
+        if closest_idx != -1:
+            bx, by, _, _ = tracker_obj.points[closest_idx].last_bbox
+            dx = x - bx
+            dy = y - by
+            return {"closest_tracker_index": closest_idx, "offsets": (dx, dy)}
+    elif isinstance(tracker_obj, BoxTracker):
+        # For BoxTracker
+        bx, by, _, _ = tracker_obj.last_bbox
+        dx = x - bx
+        dy = y - by
+        return {"closest_tracker_index": 0, "offsets": (dx, dy)}
 
 
 @app.route("/")
