@@ -36,6 +36,12 @@ class Tracker():
     def update(self, state, frame, paused=False):
         # To be implemented in subclasses
         pass
+
+    def add_text(self, text_item):
+        return self.texts.append(text_item)
+    
+    def add_arrow(self, arrow_item):
+        return self.arrows.append(arrow_item)
         
 class BoxTracker(Tracker):
     def __init__(self, state, box_size, pt, frame, tracker_num=None):
@@ -58,6 +64,28 @@ class BoxTracker(Tracker):
 
     def update(self, state, frame, paused=None):
         update_box_tracker(state, frame, self, paused)
+
+
+        # Now draw your existing overlay items using the consensus bbox as the origin
+        x, y, _, _ = self.last_bbox
+
+        overlay_colour = self.colour
+
+        # Texts (relative offsets)
+        for item in self.texts:
+            text, pos = item
+            dx, dy = pos["offsets"]
+            cv2.putText(frame, text, (int(x) + dx, int(y) + dy + 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, overlay_colour, 2)
+
+        # Arrows (relative offsets)
+        for start_pos, end_pos in self.arrows:
+            sx, sy = start_pos["offsets"]
+            ex, ey = end_pos["offsets"]
+            cv2.arrowedLine(frame, (int(x) + sx, int(y) + sy),
+                            (int(x) + ex, int(y) + ey),
+                            overlay_colour, 2, tipLength=0.2)
+
 
 class LineTracker(Tracker):
     def __init__(self, state, box_size, pt, frame):
@@ -93,6 +121,26 @@ class PolygonTracker(Tracker):
             
             # Close the polygon by drawing line from last to first
             cv2.line(frame, centers[-1], centers[0], self.colour, 2)
+        
+        # Draw texts and arrows for each point
+        for text, pos in self.texts:
+            idx = pos["closest_tracker_index"]
+            dx, dy = pos["offsets"]
+            if idx < len(self.points):
+                px, py, _, _ = self.points[idx].last_bbox
+                cv2.putText(frame, text, (int(px) + dx, int(py) + dy + 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colour, 2)
+        
+        for start_pos, end_pos in self.arrows:
+            idx = start_pos["closest_tracker_index"]  # assume same
+            sx, sy = start_pos["offsets"]
+            ex, ey = end_pos["offsets"]
+            if idx < len(self.points):
+                px, py, _, _ = self.points[idx].last_bbox
+                cv2.arrowedLine(frame, (int(px) + sx, int(py) + sy),
+                                (int(px) + ex, int(py) + ey),
+                                self.colour, 2, tipLength=0.2)
+    
 
 
 def pick_tracker(tracker_type):
@@ -175,11 +223,11 @@ def generate_tracker_colour(tracker_num):
     ]
     return colours[tracker_num % len(colours)]
 
-def add_text_to_tracker(tracker_obj, text, position):
-    tracker_obj["texts"].append((text, position))
+def add_text_to_tracker(tracker_obj, text, offset_info):
+    tracker_obj.add_text((text, offset_info))
 
 def add_arrow_to_tracker(tracker_obj, start_point, end_point):
-    tracker_obj["arrows"].append((start_point, end_point))
+    tracker_obj.add_arrow((start_point, end_point))
 
 def create_new_tracker(state, box_size, frame, socketio):
     tracker_type = state.get("create_new_tracker_type")
@@ -201,7 +249,7 @@ def create_new_tracker(state, box_size, frame, socketio):
         new_tracker = LineTracker() # TODO
     elif tracker_type == "POLYGON":
         print("Creating polygon tracker")
-        new_tracker = PolygonTracker(state) # TODO
+        new_tracker = PolygonTracker(state)
     
     if not new_tracker:
         socketio.emit("status", f"Error: Could not create tracker of type: {tracker_type}")
@@ -266,21 +314,6 @@ def update_box_tracker(state, frame, tracker_obj: BoxTracker, paused=None):
     if state.get("show_bbox", True):
         cv2.rectangle(frame, mean_p1, mean_p2, tracker_obj.colour, 2)
 
-    # Now draw your existing overlay items using the consensus bbox as the origin
-    x, y, _, _ = tracker_obj.last_bbox
-
-    overlay_colour = tracker_obj.colour
-
-    # Texts (relative offsets)
-    for text, (dx, dy) in tracker_obj.texts:
-        cv2.putText(frame, text, (int(x) + dx, int(y) + dy + 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, overlay_colour, 2)
-
-    # Arrows (relative offsets)
-    for (sx, sy), (ex, ey) in tracker_obj.arrows:
-        cv2.arrowedLine(frame, (int(x) + sx, int(y) + sy),
-                        (int(x) + ex, int(y) + ey),
-                        overlay_colour, 2, tipLength=0.3)
 
 def stream_video(
     socketio,
