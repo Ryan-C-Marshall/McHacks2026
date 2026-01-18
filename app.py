@@ -46,6 +46,8 @@ def _bbox_offsets_from_abs_click(tracker_obj: dict, x: int, y: int):
 def index():
     state["video_path"] = request.args.get("video", DEFAULT_VIDEO_PATH)
 
+    state["video_path"] = request.args.get("video", DEFAULT_VIDEO_PATH)
+
     return render_template("index.html")
 
 
