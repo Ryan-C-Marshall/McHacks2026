@@ -73,6 +73,32 @@ def make_square_bbox(center, box_size, w, h):
     y = max(0, min(y, h - box_size))
     return (x, y, int(box_size), int(box_size))
 
+def create_new_tracker(state, tracker_type, box_size, frame, socketio):
+    h, w = frame.shape[:2]
+
+    pt = state["clicked_pt"]
+    state["clicked_pt"] = None  # consume click to avoid repeated init attempts
+
+    bbox0 = make_square_bbox(pt, box_size, w, h)
+
+    try:
+        new_tracker = {"tracker": pick_tracker(tracker_type), "tracker_inited": False}
+        new_tracker["tracker"].init(frame, bbox0)
+        
+        ok_init, _ = new_tracker["tracker"].update(frame)
+        new_tracker["tracker_inited"] = bool(ok_init)
+        
+        if not new_tracker["tracker_inited"]:
+            new_tracker["tracker"] = None
+        
+        state["trackers"].append(new_tracker)
+        socketio.emit("status", f"Tracker initialized ({tracker_type}): {new_tracker['tracker_inited']}")
+
+    except Exception as e:
+        socketio.emit("status", f"Tracker init failed ({tracker_type}): {e}")
+    
+    print("Current trackers:", state["trackers"])
+
 
 def stream_video(
     socketio,
@@ -111,34 +137,17 @@ def stream_video(
 
         # Resize to tracking/output size
         frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
-        h, w = frame.shape[:2]
 
         # Initialize tracker once we have a click
-        if state.get("clicked_pt") is not None and not state.get("tracker_inited", False):
-            pt = state["clicked_pt"]
-            state["clicked_pt"] = None  # consume click to avoid repeated init attempts
+        num_trackers = len(state.get("trackers", []))
 
-            bbox0 = make_square_bbox(pt, box_size, w, h)
-
-            try:
-                state["tracker"] = pick_tracker(tracker_type)
-                state["tracker"].init(frame, bbox0)  # init may return None; ignore
-
-                # Optional sanity check: one immediate update to verify
-                ok_init, _ = state["tracker"].update(frame)
-                state["tracker_inited"] = bool(ok_init)
-
-                if not state["tracker_inited"]:
-                    state["tracker"] = None
-            except Exception as e:
-                state["tracker"] = None
-                state["tracker_inited"] = False
-                socketio.emit("status", f"Tracker init failed ({tracker_type}): {e}")
+        if (state.get("clicked_pt") is not None) and (num_trackers == 0 or not state["trackers"][0].get("tracker_inited", False)):
+            create_new_tracker(state, tracker_type, box_size, frame, socketio)
 
         # Update tracker if initialized
-        if state.get("tracker_inited") and state.get("tracker") is not None:
+        if num_trackers > 0 and state["trackers"][0]["tracker_inited"] and state["trackers"][0]["tracker"] is not None:
             timer = cv2.getTickCount()
-            ok, bbox = state["tracker"].update(frame)
+            ok, bbox = state["trackers"][0]["tracker"].update(frame)
             fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
 
             if ok:

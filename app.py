@@ -21,8 +21,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 state = {
     "tracking_active": False,
     "clicked_pt": None,
-    "tracker": None,
-    "tracker_inited": False,
+    "trackers": [],     # tracker, tracker_inited
     "show_bbox": True,
     "resume_frame": 0,
     "video_path": DEFAULT_VIDEO_PATH,
@@ -58,8 +57,6 @@ def thumbnail(video_path):
 @socketio.on("select_point")
 def on_select_point(data):
     state["clicked_pt"] = (int(data["x"]), int(data["y"]))
-    state["tracker_inited"] = False
-    state["tracker"] = None
     socketio.emit("status", f"Point received: {state['clicked_pt']}. Tracker will initialize on next frame.")
 
 
