@@ -1,30 +1,46 @@
 from kcf_to_csrt import contains, not_wider, FRAME_RESIZE, ALLOWANCE, SIZE_ALLOWANCE
 import cv2
 import sys
+import numpy as np
 
 tracker_type1 = "KCF"
 tracker_type2 = "CSRT"
 tracker_type3 = "MEDIANFLOW"
 tracker_types = [tracker_type1, tracker_type2, tracker_type3]
 
-def display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, fps):
+FRAME_RESIZE = 8
+
+PATH = "videos/Echo/echo1.mp4"
+
+bbox1 = (0,0,0,0)
+bbox2 = (0,0,0,0)
+bbox3 = (0,0,0,0)
+
+def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=True, ok3=True, frame=None, fps=0, drawn_center=(0, 0)):
+        # Keep track of drawn box centers for line drawing
+
+        
         if ok1:
             # Draw bounding box from tracker 1
             p1_1 = (int(bbox1[0]), int(bbox1[1]))
             p1_2 = (int(bbox1[0] + bbox1[2]), int(bbox1[1] + bbox1[3]))
             cv2.rectangle(frame, p1_1, p1_2, (255, 0, 0), 2, 1)
-    
-
+            
+            # Calculate center of bbox1
+            center1 = (int(bbox1[0] + bbox1[2]/2), int(bbox1[1] + bbox1[3]/2))
+            drawn_center = center1
 
             cv2.putText(frame, f"{tracker_types[0]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
         
         elif ok2 and contains(bbox1, bbox2) and not_wider(bbox1, bbox2):
-            print(f"bbox1 = {bbox1}")
             # Draw bounding box from tracker 2
             p2_1 = (int(bbox2[0]), int(bbox2[1]))
             p2_2 = (int(bbox2[0] + bbox2[2]), int(bbox2[1] + bbox2[3]))
             cv2.rectangle(frame, p2_1, p2_2, (0, 255, 0), 2, 1)
-
+            
+            # Calculate center of bbox2
+            center2 = (int(bbox2[0] + bbox2[2]/2), int(bbox2[1] + bbox2[3]/2))
+            drawn_center = center2
 
             cv2.putText(frame, f"{tracker_types[1]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
@@ -36,14 +52,17 @@ def display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, fps):
             p3_1 = (int(bbox3[0]), int(bbox3[1]))
             p3_2 = (int(bbox3[0] + bbox3[2]), int(bbox3[1] + bbox3[3]))
             cv2.rectangle(frame, p3_1, p3_2, (0, 0, 255), 2, 1)
+            
+            # Calculate center of bbox3
+            center3 = (int(bbox3[0] + bbox3[2]/2), int(bbox3[1] + bbox3[3]/2))
+            drawn_center = center3
+            
             cv2.putText(frame, f"{tracker_types[2]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
         
         else:
             cv2.putText(frame, "Tracking failure detected", (10, 30), 
             cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
-
-
 
 
         
@@ -58,8 +77,224 @@ def display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, fps):
         cv2.putText(frame, f"Box12, Box23, width12, width23: {contains(bbox1, bbox2), contains(bbox2, bbox3), not_wider(bbox1, bbox2), not_wider(bbox2, bbox3)}", (10, 90), 
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (204, 0, 204), 2)
         
-        cv2.imshow("Tracking", frame)
+
+        return drawn_center
         
+
+def multi_line_select(frame, box_width=50, box_height=50, spacing=30):
+    """
+    Allow user to trace multiple lines, then create boxes centered at points along each line.
+    
+    Args:
+        frame: Input image
+        box_width: Width of boxes to create
+        box_height: Height of boxes to create
+        spacing: Distance between box centers along each line
+    
+    Returns:
+        List of bounding boxes (x, y, w, h) centered at points along all traced lines
+    """
+    all_bboxes = []
+    all_lines = []
+    current_line = []
+    drawing = False
+    
+    def mouse_callback(event, x, y, flags, param):
+        nonlocal drawing, current_line, all_lines, all_bboxes
+        if event == cv2.EVENT_LBUTTONDOWN:
+            drawing = True
+            current_line = [(x, y)]
+            print(f"Started line at ({x}, {y})")
+        elif event == cv2.EVENT_MOUSEMOVE and drawing:
+            current_line.append((x, y))
+            # Draw preview of all lines and current line
+            frame_preview = frame.copy()
+            # Draw previous lines
+            for line in all_lines:
+                cv2.polylines(frame_preview, [np.array(line)], False, (0, 255, 0), 2)
+            # Draw current line being drawn
+            cv2.polylines(frame_preview, [np.array(current_line)], False, (0, 255, 255), 2)
+            cv2.imshow('Multi Line Select', frame_preview)
+        elif event == cv2.EVENT_LBUTTONUP:
+            drawing = False
+            if len(current_line) > 1:
+                all_lines.append(current_line)
+                print(f"Finished line {len(all_lines)} with {len(current_line)} points")
+            current_line = []
+    
+    cv2.namedWindow('Multi Line Select', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Multi Line Select', 1280, 720)
+    
+    # Draw initial frame with instructions
+    frame_display = frame.copy()
+    cv2.putText(frame_display, "Draw lines by clicking and dragging.", (10, 30), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+    cv2.putText(frame_display, "Press SPACE when done with all lines.", (10, 60), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+    cv2.imshow('Multi Line Select', frame_display)
+    cv2.setMouseCallback('Multi Line Select', mouse_callback)
+    
+    print("Draw lines by clicking and dragging. Press SPACE when done with all lines.")
+    while True:
+        key = cv2.waitKey(0) & 0xff
+        if key == ord(' '):  # SPACE
+            break
+    
+    cv2.destroyWindow('Multi Line Select')
+    
+    # Process each line and create boxes
+    for line_idx, line_points in enumerate(all_lines):
+        if len(line_points) < 2:
+            continue
+        
+        # Calculate distances along the line
+        total_distance = 0
+        distances = [0]
+        
+        for i in range(1, len(line_points)):
+            dx = line_points[i][0] - line_points[i-1][0]
+            dy = line_points[i][1] - line_points[i-1][1]
+            dist = np.sqrt(dx**2 + dy**2)
+            total_distance += dist
+            distances.append(total_distance)
+        
+        # Create boxes at regular spacing intervals
+        current_distance = 0
+        while current_distance <= total_distance:
+            # Find the point at current_distance along the line
+            idx = 0
+            for i, d in enumerate(distances):
+                if d <= current_distance:
+                    idx = i
+                else:
+                    break
+            
+            # Interpolate between line_points[idx] and line_points[idx+1]
+            if idx >= len(line_points) - 1:
+                point = line_points[-1]
+            else:
+                segment_dist = current_distance - distances[idx]
+                segment_length = distances[idx+1] - distances[idx]
+                if segment_length > 0:
+                    t = segment_dist / segment_length
+                    x = line_points[idx][0] + t * (line_points[idx+1][0] - line_points[idx][0])
+                    y = line_points[idx][1] + t * (line_points[idx+1][1] - line_points[idx][1])
+                    point = (x, y)
+                else:
+                    point = line_points[idx]
+            
+            # Create box centered at this point
+            x, y = point
+            bbox = (int(x - box_width/2), int(y - box_height/2), box_width, box_height)
+            all_bboxes.append(bbox)
+            
+            current_distance += spacing
+        
+        print(f"Created {len(all_bboxes)} boxes from line {line_idx + 1}")
+    
+    print(f"Total: Created {len(all_bboxes)} boxes from {len(all_lines)} lines")
+    return all_bboxes
+
+
+def line_select(frame, box_width=50, box_height=50, spacing=30):
+    """
+    Allow user to trace a line, then create boxes centered at points along that line.
+    
+    Args:
+        frame: Input image
+        box_width: Width of boxes to create
+        box_height: Height of boxes to create
+        spacing: Distance between box centers along the line
+    
+    Returns:
+        List of bounding boxes (x, y, w, h) centered at points along the traced line
+    """
+    line_points = []
+    drawing = False
+    
+    def mouse_callback(event, x, y, flags, param):
+        nonlocal drawing, line_points
+        if event == cv2.EVENT_LBUTTONDOWN:
+            drawing = True
+            line_points = [(x, y)]
+            print(f"Started line at ({x}, {y})")
+        elif event == cv2.EVENT_MOUSEMOVE and drawing:
+            line_points.append((x, y))
+            # Draw preview
+            frame_preview = frame.copy()
+            cv2.polylines(frame_preview, [np.array(line_points)], False, (0, 255, 255), 2)
+            cv2.imshow('Line Select', frame_preview)
+        elif event == cv2.EVENT_LBUTTONUP:
+            drawing = False
+            print(f"Finished line with {len(line_points)} points")
+    
+    import numpy as np
+    
+    cv2.namedWindow('Line Select', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Line Select', 1280, 720)
+    cv2.imshow('Line Select', frame)
+    cv2.setMouseCallback('Line Select', mouse_callback)
+    
+    print("Draw a line by clicking and dragging. Press SPACE when done.")
+    while True:
+        key = cv2.waitKey(0) & 0xff
+        if key == ord(' '):  # SPACE
+            break
+    
+    cv2.destroyWindow('Line Select')
+    
+    if len(line_points) < 2:
+        print("Not enough points to create line")
+        return []
+    
+    # Interpolate boxes along the line at regular spacing intervals
+    bboxes = []
+    total_distance = 0
+    distances = [0]
+    
+    # Calculate cumulative distances
+    for i in range(1, len(line_points)):
+        dx = line_points[i][0] - line_points[i-1][0]
+        dy = line_points[i][1] - line_points[i-1][1]
+        dist = np.sqrt(dx**2 + dy**2)
+        total_distance += dist
+        distances.append(total_distance)
+    
+    # Create boxes at regular spacing intervals
+    current_distance = 0
+    while current_distance <= total_distance:
+        # Find the point at current_distance along the line
+        idx = 0
+        for i, d in enumerate(distances):
+            if d <= current_distance:
+                idx = i
+            else:
+                break
+        
+        # Interpolate between line_points[idx] and line_points[idx+1]
+        if idx >= len(line_points) - 1:
+            point = line_points[-1]
+        else:
+            segment_dist = current_distance - distances[idx]
+            segment_length = distances[idx+1] - distances[idx]
+            if segment_length > 0:
+                t = segment_dist / segment_length
+                x = line_points[idx][0] + t * (line_points[idx+1][0] - line_points[idx][0])
+                y = line_points[idx][1] + t * (line_points[idx+1][1] - line_points[idx][1])
+                point = (x, y)
+            else:
+                point = line_points[idx]
+        
+        # Create box centered at this point
+        x, y = point
+        bbox = (int(x - box_width/2), int(y - box_height/2), box_width, box_height)
+        bboxes.append(bbox)
+        
+        current_distance += spacing
+    
+    print(f"Created {len(bboxes)} boxes along the line")
+    return bboxes
+
 
 def multi_select():
     
@@ -96,6 +331,8 @@ def multi_select():
         sys.exit()
     
     return bboxes, frame
+
+
 
 def initialize_trackers(bboxes, frame, trackers=[[], [],[]], ):
     for i, bbox in enumerate(bboxes):
@@ -135,9 +372,9 @@ if __name__ == '__main__':
         
     # Read video
 
-    frame, video = gen_frame("videos/Echo/echo1.mp4")
+    frame, video = gen_frame(PATH)
     
-    bboxes, frame = multi_select()
+    bboxes = line_select(frame, box_width=50, box_height=50, spacing=100)
     
     num_boxes = len(bboxes)
     
@@ -152,6 +389,8 @@ if __name__ == '__main__':
         timer = cv2.getTickCount()
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
 
+
+        drawn_centres = []
         for i in range(num_boxes):
             # Update each tracker
             ok1, dummy1 = trackers[0][i].update(frame)
@@ -163,9 +402,17 @@ if __name__ == '__main__':
             ok3, dummy3 = trackers[2][i].update(frame)
             if ok3:
                 bbox3 = dummy3
-            
 
-            display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, fps)
+
+            drawn_centres.append(display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, fps))
+
+        print(drawn_centres)
+        if len(drawn_centres) > 1:
+            for i in range(len(drawn_centres) - 1):
+                cv2.line(frame, drawn_centres[i], drawn_centres[i+1], (200, 200, 0), 2)
+
+        cv2.imshow("Tracking", frame)
+
 
         k = cv2.waitKey(22) & 0xff
         if k == 27:  # ESC
