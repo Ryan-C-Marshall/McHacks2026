@@ -434,11 +434,11 @@ def update_lines(trackers, frame, boxes, i, flags, bbox1, bbox2, bbox3):
     
     drawn_centre, pts = define_boxes(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, boxes=boxes)
     
-    # if drawn_centre != (0, 0):
-    #     points_to_draw.append(drawn_centre)
+    if drawn_centre != (0, 0):
+        points_to_draw.append(drawn_centre)
 
-    if pts != ((0, 0), (0, 0)):
-        points_to_draw.append(pts)
+    # if pts != ((0, 0), (0, 0)):
+    #     points_to_draw.append(pts)
 
     return bbox1, bbox2, bbox3, points_to_draw
 
@@ -451,11 +451,11 @@ def fast_track(trackers, frame, line=[[]], count=0, flags=[True], bbox1=(0, 0, 0
 
     for i in range(count, count + len(line)): # Updating trackers for all the boxes in the current line
         bbox1, bbox2, bbox3, points_to_draw = update_lines(trackers, frame, boxes, i, flags, bbox1, bbox2, bbox3)
-        drawn_centres.append(points_to_draw)
+        drawn_centres.extend(points_to_draw)
 
     count += len(line)
 
-    # return drawn_centres, count
+    return drawn_centres, count
     return points_to_draw, count
 
 def draw_lines(frame, drawn_centres):
@@ -503,7 +503,7 @@ if __name__ == '__main__':
         count = 0
         for line in all_bboxes:
             drawn_centres, count = fast_track(trackers, frame, line, count, flags=flags)
-            print(drawn_centres)
+            # print(drawn_centres)
             draw_lines(frame, drawn_centres)
 
         
