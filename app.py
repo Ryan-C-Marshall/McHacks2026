@@ -96,14 +96,6 @@ def start_tracking():
     socketio.emit("status", f"Started streaming: {state['video_path']}")
 
 
-@socketio.on("get_trackers")
-def handle_get_trackers():
-
-    with STATE_LOCK:
-        trackers = list(range(len(state.get("trackers", []))))
-
-    socketio.emit("trackers_list", {"trackers": trackers})
-
 @socketio.on("pause_tracking")
 def pause_tracking():
     state["paused"] = True
@@ -116,6 +108,14 @@ def handle_delete(data):
     with STATE_LOCK:
         delete_tracker(state, idx)
         trackers = list(range(len(state.get("trackers", []))))
+
+    socketio.emit("trackers_list", {"trackers": trackers})
+
+@socketio.on("delete_all_trackers")
+def handle_delete_all():
+    with STATE_LOCK:
+        state["trackers"] = []
+        trackers = []
 
     socketio.emit("trackers_list", {"trackers": trackers})
 
