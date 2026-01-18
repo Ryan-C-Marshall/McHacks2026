@@ -5,6 +5,11 @@ import sys
 import numpy as np
 import itertools
 
+def point_to_bbox(point, box_size):
+    """Convert a point to a bounding box centered at that point."""
+    x, y = point
+    half_size = box_size // 2
+    return (x - half_size, y - half_size, box_size, box_size)
 tracker_type1 = "KCF"
 tracker_type2 = "CSRT"
 tracker_type3 = "MEDIANFLOW"
@@ -16,12 +21,12 @@ NICE_y = 1134 *resize
 
 PATH = "videos/Lapchole/Lapchole1.mp4"
 
-BOXES = True
+BOXES = False
 
 bbox1 = bbox2 = bbox3 = (0,0,0,0)
 
 BOX_WIDTH = BOX_HEIGHT = 100
-BOX_SPACING = 30
+BOX_SPACING = 40
 
 def define_boxes(bbox1, bbox2, bbox3, ok1=True, ok2=True, ok3=True, frame=None, drawn_center=(0, 0), boxes = True):
         # Keep track of drawn box centers for line drawing
@@ -40,7 +45,7 @@ def define_boxes(bbox1, bbox2, bbox3, ok1=True, ok2=True, ok3=True, frame=None, 
             center1 = (int(bbox1[0] + bbox1[2]/2), int(bbox1[1] + bbox1[3]/2))
             drawn_center = center1
 
-        elif ok2: # and contains(bbox1, bbox2) and not_wider(bbox1, bbox2):
+        elif ok2 and contains(bbox1, bbox2) and not_wider(bbox1, bbox2):
             # Draw bounding box from tracker 2
             p2_1 = (int(bbox2[0]), int(bbox2[1]))
             p2_2 = (int(bbox2[0] + bbox2[2]), int(bbox2[1] + bbox2[3]))
@@ -344,16 +349,30 @@ def multi_select():
     
     return bboxes, frame
 
-def initialize_trackers(bboxes, frame, trackers=[[], [],[]], ):
-    for i, bbox in enumerate(bboxes):
-        trackers[0].append(cv2.legacy.TrackerKCF_create())
-        trackers[1].append(cv2.legacy.TrackerCSRT_create())
-        trackers[2].append(cv2.legacy.TrackerMedianFlow_create())
-        
-        # Initialize trackers with bbox
-        trackers[0][i].init(frame, bbox)
-        trackers[1][i].init(frame, bbox)
-        trackers[2][i].init(frame, bbox)
+def initialize_trackers(bboxes_or_points, frame, trackers=[[], [],[]], points=False):
+    if points == True:
+        for i, point in enumerate(bboxes_or_points):
+            bbox = point_to_bbox(point, BOX_WIDTH)
+            trackers[0].append(cv2.legacy.TrackerKCF_create())
+            trackers[1].append(cv2.legacy.TrackerCSRT_create())
+            trackers[2].append(cv2.legacy.TrackerMedianFlow_create())
+            
+            # Initialize trackers with bbox
+            trackers[0][i].init(frame, bbox)
+            trackers[1][i].init(frame, bbox)
+            trackers[2][i].init(frame, bbox)
+            
+    
+    else:
+        for i, bboxes_or_points in enumerate(bboxes_or_points):
+            trackers[0].append(cv2.legacy.TrackerKCF_create())
+            trackers[1].append(cv2.legacy.TrackerCSRT_create())
+            trackers[2].append(cv2.legacy.TrackerMedianFlow_create())
+            
+            # Initialize trackers with bbox
+            trackers[0][i].init(frame, bboxes_or_points)
+            trackers[1][i].init(frame, bboxes_or_points)
+            trackers[2][i].init(frame, bboxes_or_points)
 
     return trackers
 
@@ -438,7 +457,8 @@ def start_line_tracking(bboxes, frame):
 
     trackers = initialize_trackers(flat, frame)
 
-    print(trackers)
+    for tracker in trackers:
+        print(tracker)
     flags = [True] * len(flat)
     return trackers, flags
 
@@ -450,7 +470,7 @@ if __name__ == '__main__':
     # Let user select multiple lines and create boxes along them
 
     all_bboxes = [[(323, 487, 100, 100), (330, 448, 100, 100), (336, 411, 100, 100), (336, 371, 100, 100), (336, 331, 100, 100), (361, 316, 100, 100), (400, 314, 100, 100), (438, 321, 100, 100), (475, 330, 100, 100), (513, 335, 100, 100)], [(416, 4, 100, 100), (417, 43, 100, 100), (419, 82, 100, 100), (417, 122, 100, 100), (406, 154, 100, 100)], [(214, 36, 100, 100), (193, 65, 100, 100), (191, 104, 100, 100), (181, 140, 100, 100), (185, 172, 100, 100), (209, 198, 100, 100), (232, 225, 100, 100), (254, 252, 100, 100), (279, 278, 100, 100)]]
-    # all_bboxes = multi_line_select(frame, box_width=BOX_WIDTH, box_height=BOX_HEIGHT, spacing=BOX_SPACING)
+    all_bboxes = multi_line_select(frame, box_width=BOX_WIDTH, box_height=BOX_HEIGHT, spacing=BOX_SPACING)
     
     trackers, flags = start_line_tracking(all_bboxes, frame)
 
@@ -471,6 +491,10 @@ if __name__ == '__main__':
             draw_lines(frame, drawn_centres)
 
 
+
+        fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
+        cv2.putText(frame, f"FPS: {int(fps)}", (10, 30), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 0), 2)
         cv2.imshow("Tracking", frame)
 
 
@@ -481,7 +505,6 @@ if __name__ == '__main__':
 
     video.release()
     cv2.destroyAllWindows()
-    print(trackers)
 
 
 """
