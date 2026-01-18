@@ -520,7 +520,7 @@
       });
 
       socket.on("connect", () => {
-        socket.emit("get_trackers");
+        socket.emit("delete_all_trackers");
       });
 
       socket.on("trackers_list", (data) => {
