@@ -51,7 +51,15 @@ def landing():
 
 @app.route("/index")
 def index():
-    state["video_path"] = request.args.get("video", DEFAULT_VIDEO_PATH)
+
+    with STATE_LOCK:
+        state["trackers"] = []
+        state["clicked_pt"] = None
+        state["tracking_active"] = False
+        state["paused"] = False
+        state["resume_frame"] = 0
+        state["show_bbox"] = True
+        state["video_path"] = request.args.get("video", DEFAULT_VIDEO_PATH)
     start_tracking()
     return render_template("index.html")
 
@@ -85,12 +93,13 @@ def start_tracking():
 
     with STATE_LOCK:
         state["paused"] = False
+        
 
     if state["tracking_active"]:
         return
 
-    state["tracking_active"] = True
-    state["paused"] = False
+    with STATE_LOCK:
+        state["tracking_active"] = True
 
     stream_thread = threading.Thread(
         target=stream_video,
@@ -119,22 +128,7 @@ def handle_delete(data):
 
     with STATE_LOCK:
         delete_tracker(state, idx)
-        trackers = list(range(len(state.get("trackers", []))))
-
-    socketio.emit("trackers_list", {"trackers": trackers})
-
-@socketio.on("handle_reload")
-def handle_reload():
-    with STATE_LOCK:
-        state["trackers"] = []
-        state["clicked_pt"] = None
-        state["tracking_active"] = False
-        state["paused"] = False
-        state["resume_frame"] = 0
-        state["show_bbox"] = True
-        trackers = []
-
-    socketio.emit("trackers_list", {"trackers": trackers})
+        state["trackers"] = list(range(len(state.get("trackers", []))))
 
 @socketio.on("add_text")
 def handle_add_text(data):
@@ -178,6 +172,12 @@ def handle_add_arrow(data):
         add_arrow_to_tracker(tracker_obj, s_offs, e_offs)
 
     socketio.emit("status", f"Added arrow to tracker {idx}")
+
+@socketio.on("end_thread")
+def handle_end_thread():
+    with STATE_LOCK:
+        state["tracking_active"] = False
+    socketio.emit("status", "Ending tracking thread...")
 
 
 if __name__ == "__main__":

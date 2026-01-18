@@ -373,35 +373,6 @@
         });
       }
 
-      function rebuildTrackerButtons(trackerList) {
-        trackerButtons.length = 0;
-        trackerButtonList.innerHTML = "";
-        activeTracker = -1;
-
-        trackerList.forEach((idx) => {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "btn btn-success tracker-btn";
-          btn.title = `Tracker ${idx + 1}`;
-          btn.setAttribute("aria-label", `Tracker ${idx + 1}`);
-          btn.dataset.trackerIndex = idx;
-
-          btn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/>
-        <circle cx="12" cy="12" r="2" fill="currentColor"/>
-      </svg>
-    `;
-
-          btn.addEventListener("click", () => {
-            setActiveTracker(btn);
-          });
-
-          trackerButtonList.appendChild(btn);
-          trackerButtons.push(btn);
-        });
-      }
-
       // Create a green tracker button above the + button
       function addTrackerButton() {
         const btn = document.createElement("button");
@@ -546,12 +517,8 @@
         setStatus(`Deleted tracker ${idx}`);
       });
 
-      socket.on("connect", () => {
-        socket.emit("handle_reload");
-      });
-
-      socket.on("trackers_list", (data) => {
-        rebuildTrackerButtons(data.trackers);
+      socket.on("disconnect", () => {
+        socket.emit("end_thread");
       });
     </script>
     {% endblock %}
