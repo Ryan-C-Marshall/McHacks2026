@@ -1,0 +1,136 @@
+import cv2
+import sys
+
+from matplotlib import image
+import numpy as np  
+
+FRAME_RESIZE = 8
+BRIGHTNESS = 2
+CONTRAST = 10
+
+(major_ver, minor_ver, subminor_ver) = (cv2.__version__).split('.')
+
+if __name__ == '__main__' :
+ 
+    # Set up tracker.
+    # Instead of MIL, you can also use
+ 
+    tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
+    tracker_type = tracker_types[1]
+
+    if int(minor_ver) < 3:
+        tracker = cv2.Tracker_create(tracker_type)
+    else:
+        if tracker_type == 'BOOSTING':
+            tracker = cv2.legacy.TrackerBoosting_create()
+        if tracker_type == 'MIL':
+            tracker = cv2.TrackerMIL_create()
+        if tracker_type == 'KCF':
+            tracker = cv2.TrackerKCF_create()
+        if tracker_type == 'TLD':
+            tracker = cv2.TrackerTLD_create()
+        if tracker_type == 'MEDIANFLOW':
+            tracker = cv2.TrackerMedianFlow_create()
+        if tracker_type == 'GOTURN':
+            tracker = cv2.TrackerGOTURN_create()
+        if tracker_type == 'MOSSE':
+            tracker = cv2.legacy.TrackerMOSSE_create()
+        if tracker_type == "CSRT":
+            tracker = cv2.TrackerCSRT_create()
+
+    # Read video
+    video = cv2.VideoCapture("videos/Echo/echo1.mp4")
+
+    # Exit if video not opened.
+    if not video.isOpened():
+        print("Could not open video")
+        sys.exit()
+
+    # Read first frame.
+    ok, frame = video.read()
+
+    # Resize frame to make it bigger (scale by FRAME_RESIZE)
+    frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
+    # Create the sharpening kernel
+    # kernel = np.array([[0, -1, 0], [-1, 6, -1], [0, -1, 0]])
+
+    # # Sharpen the image
+    # frame = cv2.filter2D(frame, -1, kernel)
+    # cv2.imwrite('sharp_frame.jpg', frame)
+
+
+# Adjust the brightness and contrast
+# Adjusts the brightness by adding 10 to each pixel value
+
+    # Adjusts the contrast by scaling the pixel values by 2.3
+
+    if not ok:
+        print('Cannot read video file')
+        sys.exit()
+
+    # Define an initial bounding box
+    bbox = (596, 517, 165, 105)
+
+    # Uncomment the line below to select a different bounding box
+    # Create a large window for ROI selection
+    cv2.namedWindow('ROI Selector', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('ROI Selector', 1280, 720)
+    # bbox = cv2.selectROI('ROI Selector', frame, False)
+    print(bbox)
+    cv2.destroyWindow('ROI Selector')
+
+    # Initialize tracker with first frame and bounding box
+    ok = tracker.init(frame, bbox)
+    
+    # Create a resizable window and set its size
+    cv2.namedWindow('Tracking', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Tracking', 1280, 720)  # Width, Height in pixels
+    def contrast(x=1):
+        global CONTRAST
+        CONTRAST = x
+    
+    cv2.createTrackbar('R','Tracking',1,100,contrast)
+
+ 
+    while True:
+        # Read a new frame
+        ok, frame = video.read()
+
+        # Resize frame to make it bigger (scale by FRAME_RESIZE)
+        frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
+        frame = cv2.addWeighted(frame, CONTRAST, np.zeros(frame.shape, frame.dtype), 0, BRIGHTNESS)
+        c = cv2.getTrackbarPos('R','Tracking')
+        if not ok:
+            break
+        
+        # Start timer
+        timer = cv2.getTickCount()
+ 
+        # Update tracker
+        ok, bbox = tracker.update(frame)
+ 
+        # Calculate Frames per second (FPS)
+        fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer);
+ 
+        # Draw bounding box
+        if ok:
+            # Tracking success
+            p1 = (int(bbox[0]), int(bbox[1]))
+            p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
+            cv2.rectangle(frame, p1, p2, (255,0,0), 2, 1)
+        else :
+            # Tracking failure
+            cv2.putText(frame, "Tracking failure detected", (-50,80), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0,0,255),2)
+ 
+        # Display tracker type on frame
+        cv2.putText(frame, tracker_type + " Tracker", (0,20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50,170,50),2);
+     
+        # Display FPS on frame
+        cv2.putText(frame, "FPS : " + str(int(fps)), (0,50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50,170,50), 2);
+ 
+        # Display result
+        cv2.imshow("Tracking", frame)
+ 
+        # Exit if ESC pressed
+        k = cv2.waitKey(22) & 0xff
+        if k == 27 : break
