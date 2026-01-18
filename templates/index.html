@@ -51,6 +51,22 @@
         align-items: center;
         justify-content: center;
       }
+      .tracker-btn {
+        width: 52px;
+        height: 52px;
+        padding: 0;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .tracker-btn.active-tracker {
+        border: 3px solid #000000;
+      }
+      .tracker-btn svg {
+        width: 22px;
+        height: 22px;
+      }
 
       /* Left column width (rail + bottom button) */
       .left-tools {
@@ -201,6 +217,10 @@
                     </div>
 
                     <!-- BUTTON BELOW TOOL RAIL -->
+                    <div
+                      id="trackerButtonList"
+                      class="d-flex flex-column gap-2 mt-2 mb-2"
+                    ></div>
                     <button
                       type="button"
                       class="btn btn-outline-secondary tool-btn bottom mt-auto"
@@ -275,6 +295,8 @@
       const pauseBtn = document.getElementById("pauseBtn");
       const statusDiv = document.getElementById("status");
 
+      const trackerButtons = [];
+
       function setStatus(msg) {
         statusDiv.textContent = "Status: " + msg;
       }
@@ -320,6 +342,37 @@
         setStatus("Pausing...");
       });
 
+      const trackerButtonList = document.getElementById("trackerButtonList");
+      let trackerCount = 0;
+
+      // Create a green tracker button above the + button
+      function addTrackerButton() {
+        trackerCount += 1;
+        const trackerId = `tracker_${trackerCount}`;
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-success tracker-btn";
+        btn.title = `Tracker ${trackerCount}`;
+        btn.setAttribute("aria-label", `Tracker ${trackerCount}`);
+        btn.dataset.trackerId = trackerId;
+
+        // Simple "target" icon
+        btn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/>
+            <circle cx="12" cy="12" r="2" fill="currentColor"/>
+          </svg>
+        `;
+
+        btn.addEventListener("click", () => setActiveTracker(btn));
+
+        trackerButtonList.appendChild(btn);
+        trackerButtons.push(btn);
+
+        setActiveTracker(btn);
+      }
+
       canvas.addEventListener("click", (e) => {
         const rect = canvas.getBoundingClientRect();
         const cssX = e.clientX - rect.left;
@@ -328,7 +381,20 @@
         const trackX = Math.round((cssX / rect.width) * TARGET_W);
         const trackY = Math.round((cssY / rect.height) * TARGET_H);
 
-        socket.emit("select_point", { x: trackX, y: trackY });
+        // If "+" tool is active, treat this click as "add tracker"
+        const isAddTrackerMode = document
+          .getElementById("toolTracker")
+          .classList.contains("active");
+
+        if (isAddTrackerMode) {
+          // Create the UI button
+          addTrackerButton();
+
+          setStatus(`Added tracker at (${trackX}, ${trackY})`);
+
+          // Otherwise normal behavior
+          socket.emit("select_point", { x: trackX, y: trackY });
+        }
       });
 
       const bboxToggle = document.getElementById("bboxToggle");
@@ -346,6 +412,10 @@
       function setActiveTool(btn) {
         toolButtons.forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
+      }
+      function setActiveTracker(btn) {
+        trackerButtons.forEach((b) => b.classList.remove("active-tracker"));
+        btn.classList.add("active-tracker");
       }
 
       toolButtons.forEach((btn) => {
