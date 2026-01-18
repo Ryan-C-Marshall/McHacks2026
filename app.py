@@ -140,7 +140,6 @@ def handle_delete(data):
 
     with STATE_LOCK:
         delete_tracker(state, idx)
-        state["trackers"] = list(range(len(state.get("trackers", []))))
 
 @socketio.on("add_text")
 def handle_add_text(data):
