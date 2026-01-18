@@ -90,7 +90,6 @@ def generate_tracker_colour(tracker_num):
     return colours[tracker_num % len(colours)]
 
 def add_text_to_tracker(tracker_obj, text, position):
-    print(position)
     tracker_obj["texts"].append((text, position))
 
 def add_arrow_to_tracker(tracker_obj, start_point, end_point):
@@ -152,7 +151,6 @@ def update_tracker(state, frame, tracker_type, tracker_num, paused=False):
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
 
     if ok:
-        print("Last bbox:", tracker_obj["last_bbox"])
         x, y, bw, bh = tracker_obj["last_bbox"]
         cx = int(x + bw / 2)
         cy = int(y + bh / 2)
