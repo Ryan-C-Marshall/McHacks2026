@@ -11,7 +11,7 @@ FPS_LIMIT = 30
 TARGET_SIZE = (640, 480)
 
 BOX_SIZE = 100
-tracker_num = 1
+tracker_num = 2
 tracker_type = tracker_types[tracker_num]
 
 app = Flask(__name__)

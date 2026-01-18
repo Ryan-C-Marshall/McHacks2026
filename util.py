@@ -19,7 +19,7 @@ def pick_tracker(tracker_type):
         if tracker_type == 'MIL':
             return cv2.TrackerMIL_create()
         if tracker_type == 'KCF':
-            return cv2.TrackerKCF_create()
+            return cv2.legacy.TrackerKCF_create()
         if tracker_type == 'TLD':
             return cv2.TrackerTLD_create()
         if tracker_type == 'MEDIANFLOW':
