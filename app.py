@@ -3,7 +3,7 @@ from flask import Flask, render_template, make_response, request
 from flask_socketio import SocketIO
 import cv2
 
-from util import load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH, delete_tracker, STATE_LOCK, add_arrow_to_tracker, add_text_to_tracker
+from util import load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH, delete_tracker, STATE_LOCK, add_arrow_to_tracker, add_text_to_tracker, Tracker
 
 tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 
@@ -23,6 +23,8 @@ state = {
     "streaming_video": False,
     "paused": False,
     "clicked_pt": None,
+    "create_new_tracker_type": None, # "BOX", "LINE", "POLYGON"
+    "add_point_to_polygon_tracker": None, # (tracker_idx, (x,y))
     "trackers": [],     # tracker, tracker_inited
     "show_bbox": True,
     "resume_frame": 0,
@@ -32,11 +34,11 @@ state = {
 
 stream_thread = None
 
-def _bbox_offsets_from_abs_click(tracker_obj: dict, x: int, y: int):
+def _bbox_offsets_from_abs_click(tracker_obj: Tracker, x: int, y: int):
     """Convert absolute frame coords (x,y) to offsets relative to latest bbox.
     Returns (dx, dy) or None if bbox not available.
     """
-    bbox = tracker_obj.get("last_bbox")
+    bbox = tracker_obj.last_bbox
     if not bbox:
         return None
     bx, by, bw, bh = bbox
@@ -66,6 +68,7 @@ def index():
     with STATE_LOCK:
         state["trackers"] = []
         state["clicked_pt"] = None
+        state["create_new_tracker_type"] = None
         state["tracking_active"] = False
         state["paused"] = False
         state["resume_frame"] = 0
@@ -88,15 +91,33 @@ def thumbnail(video_path):
 
 @socketio.on("select_point")
 def on_select_point(data):
-    state["clicked_pt"] = (int(data["x"]), int(data["y"]))
-    socketio.emit("status", f"Point received: {state['clicked_pt']}. Tracker will initialize on next frame.")
+    with STATE_LOCK:
+        state["clicked_pt"] = (int(data["x"]), int(data["y"]))
+        state["create_new_tracker_type"] = "BOX"
+    socketio.emit("status", f"Point received: {state['clicked_pt']}. Tracker {state['create_new_tracker_type']} will initialize on next frame.")
 
+@socketio.on("start_polygon")
+def on_start_polygon():
+    with STATE_LOCK:
+        state["create_new_tracker_type"] = "POLYGON"
+
+@socketio.on("select_polygon")
+def on_select_polygon(data):
+
+    with STATE_LOCK:
+        idx = int(data.get("tracker_num"))
+
+        if idx >= len(state.get("trackers", [])):
+            socketio.emit("status", f"Polygon not added (tracker {idx} not found)")
+            return
+        
+        state["add_point_to_polygon_tracker"] = (idx, (int(data["x"]), int(data["y"])))
+    socketio.emit("status", f"Polygon selected. Tracker {state['create_new_tracker_type']} will initialize on next frame.")
 
 @socketio.on("toggle_bbox")
 def on_toggle_bbox(data):
     state["show_bbox"] = bool(data.get("show", True))
     socketio.emit("status", f"Show bbox: {state['show_bbox']}")
-
 
 @socketio.on("start_tracking")
 def start_tracking():
@@ -181,19 +202,6 @@ def handle_add_arrow(data):
         add_arrow_to_tracker(tracker_obj, s_offs, e_offs)
 
     socketio.emit("status", f"Added arrow to tracker {idx}")
-
-# @socketio.on("end_thread")
-# def handle_end_thread():
-#     print("Handling end_thread...")
-
-#     with STATE_LOCK:
-#         state["tracking_active"] = False
-#     while state.get("streaming_video", True):
-#         # wait for streaming to stop
-#         continue
-
-#     socketio.emit("status", "Ending tracking thread...")
-
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=5001, debug=True)

@@ -33,16 +33,18 @@ class Tracker():
         self.texts = []
         self.arrows = []
         
-        self.update(state, frame)
+        self.update(state, frame, paused=False)
         self.tracker_inited = True
-    
-    def update(self, state, frame):
+
+    def update(self, state, frame, paused=False):
         # To be implemented in subclasses
         pass
         
 class BoxTracker(Tracker):
     def __init__(self, state, box_size, pt, frame):
         h, w = frame.shape[:2]
+
+        self.box_size = box_size
 
         self.bbox0 = make_square_bbox(pt, box_size, w, h)
         
@@ -55,16 +57,28 @@ class BoxTracker(Tracker):
 
         super().__init__(state, box_size, pt, frame)
 
-    def update(self, state, frame):
+    def update(self, state, frame, paused=None):
         update_box_tracker(state, frame, self)
 
 class LineTracker(Tracker):
-    def __init__(self):
+    def __init__(self, state, box_size, pt, frame):
         pass
+        # super().__init__(state, box_size, pt, frame)
 
 class PolygonTracker(Tracker):
-    def __init__(self):
-        pass
+    def __init__(self, state, box_size, pt, frame):
+        h, w = frame.shape[:2]
+        self.points: list[BoxTracker] = []
+
+        super().__init__(state, box_size, pt, frame)
+
+    def add_point(self, state, box_size, pt, frame):
+        new_tracker = BoxTracker(state, box_size, pt, frame)
+
+    def update(self, state, frame, paused=None):
+        for pt_tracker in self.points:
+            pt_tracker.update(state, frame)
+
 
 def pick_tracker(tracker_type):
 
@@ -152,7 +166,8 @@ def add_text_to_tracker(tracker_obj, text, position):
 def add_arrow_to_tracker(tracker_obj, start_point, end_point):
     tracker_obj["arrows"].append((start_point, end_point))
 
-def create_new_tracker(state, tracker_type, box_size, frame, socketio):
+def create_new_tracker(state, box_size, frame, socketio):
+    tracker_type = state.get("create_new_tracker_type")
     if tracker_type not in ["BOX", "LINE", "POLYGON"]:
         socketio.emit("status", f"Error: Unknown tracker type: {tracker_type}")
         return
@@ -191,10 +206,11 @@ def delete_all_trackers(state):
     with STATE_LOCK:
         state["trackers"] = []
 
-def update_box_tracker(state, frame, tracker_obj: BoxTracker):
+def update_box_tracker(state, frame, tracker_obj: BoxTracker, paused=None):
+    if paused is None:
+        paused = state.get("paused", False)
 
     subtrackers = tracker_obj.fundamental_trackers
-    paused = state.get("paused", False)
 
     # Update each subtracker (unless paused)
     if not paused:
@@ -302,9 +318,17 @@ def stream_video(
 
         # Initialize tracker on a click
         with STATE_LOCK:
-            if state.get("clicked_pt") is not None:
-                create_new_tracker(state, "BOX", box_size, frame, socketio)
-                state["clicked_pt"] = None  # consume click
+            if state.get("create_new_tracker_type") is not None:
+                # We need to create a new tracker
+                create_new_tracker(state, box_size, frame, socketio)
+                state["create_new_tracker_type"] = None  # consume click
+            if state.get("add_point_to_polygon_tracker") is not None:
+                idx, pt = state.get("add_point_to_polygon_tracker", (None, None))
+                if 0 <= idx < len(state.get("trackers", [])):
+                    tracker_obj: Tracker = state["trackers"][idx]
+                    if isinstance(tracker_obj, PolygonTracker):
+                        tracker_obj.add_point(state, box_size, pt, frame)
+                state["add_point_to_polygon_tracker"] = None  # consume
 
         # Update trackers (if initialized)
         with STATE_LOCK:
