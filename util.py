@@ -110,7 +110,7 @@ class LineTracker(Tracker):
                 cx = int(x + w / 2)
                 cy = int(y + h / 2)
                 centers.append((cx, cy))
-            draw_lines(frame, centers)
+            draw_lines(frame, centers, self.colour)
         
         # Draw texts and arrows for each point
         for text, pos in self.texts:
