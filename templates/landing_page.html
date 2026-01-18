@@ -1,69 +1,68 @@
-{% extends "base.html" %}
-
-{% block title %}Video Tracker Gallery{% endblock %}
-
+{% extends "base.html" %} {% block title %}Video Tracker Gallery{% endblock %}
 {% block extra_head %}
 <style>
-    .hero {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 100px 0;
-    }
-    .card-img-top {
-        aspect-ratio: 16 / 9;
-        object-fit: cover;
-        width: 100%;
-        border-radius: 20px;
-        overflow: hidden;
-        padding: 12px;
-    }
-    .video-card {
-        border: none !important;
-        box-shadow: none !important;
-        background-color: transparent;
-        transition: background-color 0.3s ease;
-        border-radius: 15px;
-    }
-    .video-card:hover {
-        background-color: #e0e0e0;
-    }
+  .hero {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 100px 0;
+  }
+  .card-img-top {
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    width: 100%;
+    border-radius: 20px;
+    overflow: hidden;
+    padding: 12px;
+  }
+  .video-card {
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent;
+    transition: background-color 0.3s ease;
+    border-radius: 15px;
+  }
+  .video-card:hover {
+    background-color: #e0e0e0;
+  }
 </style>
-{% endblock %}
+{% endblock %} {% block content %}
+<!-- Hero Section -->
+<section class="hero">
+  <div class="container text-center">
+    <h1 class="display-4 fw-bold">Video Tracker Gallery</h1>
+    <p class="lead">Explore and track objects in various video collections</p>
+    <a href="/" class="btn btn-light btn-lg">Start Tracking</a>
+  </div>
+</section>
 
-{% block content %}
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="container text-center">
-            <h1 class="display-4 fw-bold">Video Tracker Gallery</h1>
-            <p class="lead">Explore and track objects in various video collections</p>
-            <a href="/" class="btn btn-light btn-lg">Start Tracking</a>
+<!-- Video Thumbnails Grid -->
+<div class="container my-5">
+  <h2 class="text-center mb-4">Available Videos</h2>
+  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-2">
+    {% for video in videos %}
+    <div class="col">
+      <a href="/index?video={{ video.path }}" class="text-decoration-none">
+        <div class="card video-card h-100">
+          <img
+            src="/thumbnail/{{ video.path }}"
+            class="card-img-top"
+            alt="Thumbnail"
+          />
+          <div class="card-body">
+            <h5 class="card-title">{{ video.title }}</h5>
+            <p class="card-text">{{ video.desc }}</p>
+          </div>
         </div>
-    </section>
-
-    <!-- Video Thumbnails Grid -->
-    <div class="container my-5">
-        <h2 class="text-center mb-4">Available Videos</h2>
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-2">
-            {% for video in videos %}
-            <div class="col">
-                <a href="/?video={{ video.path }}" class="text-decoration-none">
-                  <div class="card video-card h-100">
-                      <img src="/thumbnail/{{ video.path }}" class="card-img-top" alt="Thumbnail">
-                      <div class="card-body">
-                          <h5 class="card-title">{{ video.title }}</h5>
-                          <p class="card-text">{{ video.desc }}</p>
-                      </div>
-                  </div>
-                </a>
-            </div>
-            {% endfor %}
-        </div>
+      </a>
     </div>
+    {% endfor %}
+  </div>
+</div>
 
-    <!-- Footer -->
-    <footer class="bg-dark text-white mt-5 py-4">
-        <div class="container text-center">
-            <p class="mb-0">&copy; 2026 McHacks. Built with Flask and Bootstrap.</p>
-        </div>
-    </footer>
+<!-- Footer -->
+<footer class="bg-dark text-white mt-5 py-4">
+  <div class="container text-center">
+    <p class="mb-0">&copy; 2026 McHacks. Built with Flask and Bootstrap.</p>
+  </div>
+</footer>
 {% endblock %}
