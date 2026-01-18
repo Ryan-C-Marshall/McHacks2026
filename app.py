@@ -82,11 +82,12 @@ def on_toggle_bbox(data):
 def start_tracking():
     global stream_thread
 
-    if state["tracking_active"] and not state["paused"]:
+    state["paused"] = False
+
+    if state["tracking_active"]:
         return
 
     state["tracking_active"] = True
-    state["paused"] = False
 
     stream_thread = threading.Thread(
         target=stream_video,

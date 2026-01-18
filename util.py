@@ -102,17 +102,21 @@ def create_new_tracker(state, tracker_type, box_size, frame, socketio):
     # new_tracker["texts"] = [(f"{tracker_type} Tracker ({len(state['trackers']) + 1})", (10, -20))]
     # new_tracker["arrows"] = [((0, 0), (box_size, box_size))]
 
-    new_tracker["tracker"].init(frame, bbox0)
-    
-    ok_init, _ = new_tracker["tracker"].update(frame)
-    new_tracker["tracker_inited"] = bool(ok_init)
-    
-    if not new_tracker["tracker_inited"]:
-        new_tracker["tracker"] = None
-    
-    with STATE_LOCK:
-        state["trackers"].append(new_tracker)
-    socketio.emit("status", f"Tracker initialized ({tracker_type}): {new_tracker['tracker_inited']}")
+        new_tracker["tracker"].init(frame, bbox0)
+        
+        ok_init, bbox = new_tracker["tracker"].update(frame)
+        new_tracker["tracker_inited"] = bool(ok_init)
+        new_tracker["last_bbox"] = bbox if ok_init else bbox0
+        
+        if not new_tracker["tracker_inited"]:
+            new_tracker["tracker"] = None
+        
+        with STATE_LOCK:
+            state["trackers"].append(new_tracker)
+        socketio.emit("status", f"Tracker initialized ({tracker_type}): {new_tracker['tracker_inited']}")
+
+    except Exception as e:
+        socketio.emit("status", f"Tracker init failed ({tracker_type}): {e}")
     
 def delete_tracker(state, tracker_num):
     with STATE_LOCK:
@@ -123,24 +127,24 @@ def delete_all_trackers(state):
     with STATE_LOCK:
         state["trackers"] = []
 
-def update_tracker(state, frame, tracker_type, tracker_num):
-
+def update_tracker(state, frame, tracker_type, tracker_num, paused=False):
     with STATE_LOCK:
         if tracker_num >= len(state["trackers"]):
             return
 
         tracker_obj = state["trackers"][tracker_num]
-    timer = cv2.getTickCount()
-    ok, bbox = tracker_obj["tracker"].update(frame)
-    fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
+    
+    ok = True
+    fps = None
+    if not paused:
+        # Only calculate new tracker position if not paused
+        timer = cv2.getTickCount()
+        ok, bbox = tracker_obj["tracker"].update(frame)
+        tracker_obj["last_bbox"] = bbox
+        fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
 
     if ok:
-        x, y, bw, bh = bbox
-
-        # with STATE_LOCK:
-        #     tracker_obj["last_bbox"] = (float(x), float(y), float(bw), float(bh))
-
-
+        x, y, bw, bh = tracker_obj["last_bbox"]
         cx = int(x + bw / 2)
         cy = int(y + bh / 2)
 
@@ -183,7 +187,7 @@ def update_tracker(state, frame, tracker_type, tracker_num):
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2
         )
 
-    if tracker_num == 0:
+    if tracker_num == 0 and fps is not None:
         cv2.putText(
             frame, f"{tracker_type} Tracker", (10, 60),
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
@@ -219,32 +223,36 @@ def stream_video(
     else:
         socketio.emit("status", "Streaming started")
 
-    while not state["paused"]:
-        ret, frame = cap.read()
+    # Initialize frame
+    ret, frame = cap.read()
 
-        if not ret or frame is None:
-            state["paused"] = True
-            break
+    while True:
 
-        # Record resume position after successful read
-        state["resume_frame"] = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+        if not state.get("paused", True):
+            # If not paused, update video
+            ret, frame = cap.read()
 
-        # Resize to tracking/output size
-        frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+            if not ret or frame is None:
+                state["paused"] = True
+                break
 
-        # Initialize tracker once we have a click
+            # Record resume position after successful read
+            state["resume_frame"] = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+
+            # Resize to tracking/output size
+            frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+
+        # Initialize tracker on a click
         if state.get("clicked_pt") is not None:
             create_new_tracker(state, tracker_type, box_size, frame, socketio)
             state["clicked_pt"] = None  # consume click
-
-        num_trackers = len(state.get("trackers", []))
 
         # Update trackers (if initialized)
         with STATE_LOCK:
             tracker_indices = list(range(len(state.get("trackers", []))))
 
         for i in tracker_indices:
-            update_tracker(state, frame, tracker_type, tracker_num=i)
+            update_tracker(state, frame, tracker_type, tracker_num=i, paused=state["paused"])
 
         # Encode and emit frame
         ok_jpg, buffer = cv2.imencode(".jpg", frame)
