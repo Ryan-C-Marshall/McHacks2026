@@ -20,6 +20,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # One shared state object for util.stream_video
 state = {
     "tracking_active": False,
+    "paused": False,
     "clicked_pt": None,
     "trackers": [],     # tracker, tracker_inited
     "show_bbox": True,
@@ -70,10 +71,11 @@ def on_toggle_bbox(data):
 def start_tracking():
     global stream_thread
 
-    if state["tracking_active"]:
+    if state["tracking_active"] and not state["paused"]:
         return
 
     state["tracking_active"] = True
+    state["paused"] = False
 
     # If you want to use the landing page selection later, pass that path instead.
 
@@ -95,7 +97,7 @@ def start_tracking():
 
 @socketio.on("pause_tracking")
 def pause_tracking():
-    state["tracking_active"] = False
+    state["paused"] = True
     socketio.emit("status", "Pausing...")
 
 
