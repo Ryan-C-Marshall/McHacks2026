@@ -3,6 +3,8 @@ import sys
 import numpy as np
 from kcf_to_csrt import contains
 
+from multibox_kcf_csrt import initialize_trackers
+
 FRAME_RESIZE = 12
 PATH = "videos/Echo/echo3.mp4"
 BOX_SIZE = 100  # Size of tracking box for each vertex
@@ -231,7 +233,11 @@ def draw_polygon_on_frame(frame, points, color=(0, 255, 255), thickness=2):
         #cv2.rectangle(frame, top_left, bottom_right, color, -1)
         #cv2.putText(frame, str(i+1), (x+8, y-8), 
                    #cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-
+def point_to_bbox(point, box_size):
+    """Convert a point to a bounding box centered at that point."""
+    x, y = point
+    half_size = box_size // 2
+    return (x - half_size, y - half_size, box_size, box_size)
 
 if __name__ == '__main__':
     # Read video
@@ -260,12 +266,12 @@ if __name__ == '__main__':
         sys.exit()
     
     # Show final polygon
-    preview = frame.copy()
-    draw_polygon_on_frame(preview, polygon_points)
-    cv2.imshow('Final Polygon', preview)
-    print(f"Preview - Press any key to start tracking... (BOX_SIZE = {BOX_SIZE}px)")
-    cv2.waitKey(1500)
-    cv2.destroyWindow('Final Polygon')
+    # preview = frame.copy()
+    # draw_polygon_on_frame(preview, polygon_points)
+    # cv2.imshow('Final Polygon', preview)
+    # print(f"Preview - Press any key to start tracking... (BOX_SIZE = {BOX_SIZE}px)")
+    # cv2.waitKey(1500)
+    # cv2.destroyWindow('Final Polygon')
     
     # Create trackers for each vertex
     num_vertices = len(polygon_points)
@@ -274,12 +280,7 @@ if __name__ == '__main__':
     for i, point in enumerate(polygon_points):
         # Create bbox around each vertex point
         x, y = point
-        bbox = (
-            x - BOX_SIZE // 2,
-            y - BOX_SIZE // 2,
-            BOX_SIZE,
-            BOX_SIZE
-        )
+        bbox = point_to_bbox(point, BOX_SIZE)
         
         # Create 3 trackers per vertex
         tracker_kcf = cv2.legacy.TrackerKCF_create()
@@ -289,6 +290,7 @@ if __name__ == '__main__':
         tracker_kcf.init(frame, bbox)
         tracker_csrt.init(frame, bbox)
         tracker_mf.init(frame, bbox)
+
         
         vertex_trackers.append({
             'vertex_id': i,
@@ -300,7 +302,9 @@ if __name__ == '__main__':
             'last_center': point
         })
     
+
     print(f"Initialized {num_vertices} vertex trackers with {num_vertices * 3} total trackers")
+    print(vertex_trackers)
     
     # Create tracking window
     cv2.namedWindow('Tracking', cv2.WINDOW_NORMAL)
