@@ -1,4 +1,4 @@
-from kcf_to_csrt import contains, not_wider, FRAME_RESIZE, ALLOWANCE, SIZE_ALLOWANCE
+from kcf_to_csrt import contains, not_wider, ALLOWANCE, SIZE_ALLOWANCE
 from line_tracker import interpolate_line_points, draw_smooth_line
 import cv2
 import sys
@@ -10,19 +10,20 @@ tracker_type2 = "CSRT"
 tracker_type3 = "MEDIANFLOW"
 tracker_types = [tracker_type1, tracker_type2, tracker_type3]
 
-FRAME_RESIZE = 8
-ALLOWANCE = 0
+resize = 0.8
+NICE_x = 748 *resize
+NICE_y = 1134 *resize
 
-PATH = "videos/Echo/echo1.mp4"
+PATH = "videos/Lapchole/Lapchole1.mp4"
 
-bbox1 = (0,0,0,0)
-bbox2 = (0,0,0,0)
-bbox3 = (0,0,0,0)
+BOXES = True
+
+bbox1 = bbox2 = bbox3 = (0,0,0,0)
 
 BOX_WIDTH = BOX_HEIGHT = 100
-BOX_SPACING = 10
+BOX_SPACING = 40
 
-def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=True, ok3=True, frame=None, drawn_center=(0, 0), boxes = True):
+def define_boxes(bbox1, bbox2, bbox3, ok1=True, ok2=True, ok3=True, frame=None, drawn_center=(0, 0), boxes = True):
         # Keep track of drawn box centers for line drawing
 
         
@@ -32,14 +33,13 @@ def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=Tru
             p1_2 = (int(bbox1[0] + bbox1[2]), int(bbox1[1] + bbox1[3]))
             if boxes:
                 cv2.rectangle(frame, p1_1, p1_2, (100, 0, 0), 2, 1)
-                cv2.putText(frame, f"{tracker_types[0]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 0, 0), 2)
+                # cv2.putText(frame, f"{tracker_types[0]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 0, 0), 2)
 
             
             # Calculate center of bbox1
             center1 = (int(bbox1[0] + bbox1[2]/2), int(bbox1[1] + bbox1[3]/2))
             drawn_center = center1
 
-        
         elif ok2 and contains(bbox1, bbox2) and not_wider(bbox1, bbox2):
             # Draw bounding box from tracker 2
             p2_1 = (int(bbox2[0]), int(bbox2[1]))
@@ -56,13 +56,13 @@ def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=Tru
 
 
 
-        elif ok3 and contains(bbox2, bbox3) and not_wider(bbox2, bbox3):
+        elif ok3 and contains(bbox1, bbox3) and not_wider(bbox1, bbox3):
             # Draw bounding box from tracker 3
             p3_1 = (int(bbox3[0]), int(bbox3[1]))
             p3_2 = (int(bbox3[0] + bbox3[2]), int(bbox3[1] + bbox3[3]))
             if boxes:
                 cv2.rectangle(frame, p3_1, p3_2, (0, 0, 100), 2, 1)
-                cv2.putText(frame, f"{tracker_types[2]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 100), 2)
+                # cv2.putText(frame, f"{tracker_types[2]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 100), 2)
 
             
             # Calculate center of bbox3
@@ -71,10 +71,10 @@ def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=Tru
             
 
         
-        else:
-            if boxes:
-                cv2.putText(frame, "Tracking failure detected", (10, 30), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
+        # else:
+        #     if boxes:
+        #         cv2.putText(frame, "Tracking failure detected", (10, 30), 
+        #         cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
 
 
         
@@ -85,12 +85,11 @@ def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=Tru
         # cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2)
 
 
-        cv2.putText(frame, f"Box12, Box23, width12, width23: {contains(bbox1, bbox2), contains(bbox2, bbox3), not_wider(bbox1, bbox2), not_wider(bbox2, bbox3)}", (10, 90), 
-            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (204, 0, 204), 2)
+        # cv2.putText(frame, f"Box12, Box23, width12, width23: {contains(bbox1, bbox2), contains(bbox2, bbox3), not_wider(bbox1, bbox2), not_wider(bbox2, bbox3)}", (10, 90), 
+        #     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (204, 0, 204), 2)
         
 
         return drawn_center
-        
 
 def multi_line_select(frame, box_width=50, box_height=50, spacing=30):
     """
@@ -206,11 +205,9 @@ def multi_line_select(frame, box_width=50, box_height=50, spacing=30):
             
             current_distance += spacing
         
-        print(f"Created {len(all_bboxes)} boxes from line {line_idx + 1}")
+        print(f"Created {len(all_bboxes[line_idx])} boxes from line {line_idx + 1}")
     
-    print(f"Total: Created {len(all_bboxes)} boxes from {len(all_lines)} lines")
     return all_bboxes
-
 
 def line_select(frame, box_width=50, box_height=50, spacing=30):
     """
@@ -311,7 +308,6 @@ def line_select(frame, box_width=50, box_height=50, spacing=30):
     print(f"Created {len(bboxes)} boxes along the line")
     return bboxes
 
-
 def multi_select():
     
     # Ask user if they want to select ROI manually
@@ -348,8 +344,6 @@ def multi_select():
     
     return bboxes, frame
 
-
-
 def initialize_trackers(bboxes, frame, trackers=[[], [],[]], ):
     for i, bbox in enumerate(bboxes):
         trackers[0].append(cv2.legacy.TrackerKCF_create())
@@ -362,9 +356,8 @@ def initialize_trackers(bboxes, frame, trackers=[[], [],[]], ):
         trackers[2][i].init(frame, bbox)
 
     return trackers
-        
 
-def gen_frame(path):
+def init_video(path):
     video = cv2.VideoCapture(path)
     
     if not video.isOpened():
@@ -373,96 +366,97 @@ def gen_frame(path):
     
     # Read first frame
     ok, frame = video.read()
-    frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
+    frame = cv2.resize(frame, None, fx=NICE_x/frame.shape[0], fy=NICE_y/frame.shape[1], interpolation=cv2.INTER_LINEAR)
 
     return frame, video
 
 def next_frame(frame, video):
     ok, frame = video.read()
-    frame = cv2.resize(frame, None, fx=FRAME_RESIZE, fy=FRAME_RESIZE, interpolation=cv2.INTER_LINEAR)
+    frame = cv2.resize(frame, None, fx=NICE_x/frame.shape[0], fy=NICE_y/frame.shape[1], interpolation=cv2.INTER_LINEAR)
 
 
     return ok, frame
 
+def draw_lines(trackers, frame, drawn_centres, boxes, i, flags, bbox1, bbox2, bbox3):
+    # Update each tracker
+    ok1 = ok2 = ok3 = False
+    ok1, dummy1 = trackers[0][i].update(frame)
+    if ok1:
+        bbox1 = dummy1
+        flags[i] = True  # Tracker 1 is working
+
+
+    elif flags[i]:
+        ok2, dummy2 = trackers[1][i].update(frame)
+    
+
+        if ok2:
+            bbox2 = dummy2
+        else:
+            ok3, dummy3 = trackers[2][i].update(frame)
+            if ok3 and flags[i]:
+                bbox3 = dummy3
+            else:
+                flags[i] = False  # Mark this tracker as failed
+    
+
+    #cv2.putText(frame, f"ok1: {ok1}, ok2: {ok2}, ok3: {ok3}", (10, 100), 
+    #    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (204, 0, 204), 2)
+    
+    drawn_centre = define_boxes(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, boxes=boxes)
+    
+    if drawn_centre != (0, 0):
+        drawn_centres.append(drawn_centre)
+    
+    return bbox1, bbox2, bbox3
+
+def line_handling(trackers, frame, count, flags):
+    drawn_centres = []
+    boxes = BOXES
+    if len(line) == 1:
+        boxes = True
+    
+    bbox1 = bbox2 = bbox3 = (0,0,0,0)
+
+    for i in range(count, count + len(line)): # Updating trackers for all the boxes in the current line
+        bbox1, bbox2, bbox3 = draw_lines(trackers, frame, drawn_centres, boxes, i, flags, bbox1, bbox2, bbox3)
+
+    count += len(line)
+
+
+    if len(drawn_centres) > 1:
+        for i in range(len(drawn_centres) - 1):
+            cv2.line(frame, drawn_centres[i], drawn_centres[i+1], (200, 200, 0), 2)
+    return drawn_centres, count
+
+
 if __name__ == '__main__':
-        
-    # Read video
+    # Initialize video
+    frame, video = init_video(PATH)
+    print(frame.shape)
 
-    frame, video = gen_frame(PATH)
+    # Let user select multiple lines and create boxes along them
+    # all_bboxes = multi_line_select(frame, box_width=BOX_WIDTH, box_height=BOX_HEIGHT, spacing=BOX_SPACING)
 
-    
-    all_bboxes = multi_line_select(frame, box_width=BOX_WIDTH, box_height=BOX_HEIGHT, spacing=BOX_SPACING)
+    all_bboxes = [[(323, 487, 100, 100), (330, 448, 100, 100), (336, 411, 100, 100), (336, 371, 100, 100), (336, 331, 100, 100), (361, 316, 100, 100), (400, 314, 100, 100), (438, 321, 100, 100), (475, 330, 100, 100), (513, 335, 100, 100)], [(416, 4, 100, 100), (417, 43, 100, 100), (419, 82, 100, 100), (417, 122, 100, 100), (406, 154, 100, 100)], [(214, 36, 100, 100), (193, 65, 100, 100), (191, 104, 100, 100), (181, 140, 100, 100), (185, 172, 100, 100), (209, 198, 100, 100), (232, 225, 100, 100), (254, 252, 100, 100), (279, 278, 100, 100)]]
 
-
-
-    
-    
+    print(all_bboxes)
     flat = list(itertools.chain.from_iterable(all_bboxes))
 
 
     trackers = initialize_trackers(flat, frame)
+    flags = [True] * len(flat)
 
     while True:
         ok, frame = next_frame(frame, video)
 
-        
         if not ok: break
         
         timer = cv2.getTickCount()
-        # fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
+
         count = 0
         for line in all_bboxes:
-            drawn_centres = []
-            boxes = False
-            if len(line) == 1:
-                boxes = True
-            for i in range(count, count + len(line)): # Updating trackes for all the boxes in the current line
-                # Update each tracker
-                ok1 = ok2 = ok3 = False
-                ok1, dummy1 = trackers[0][i].update(frame)
-                if ok1:
-                    bbox1 = dummy1
-
-                else:
-                    ok2, dummy2 = trackers[1][i].update(frame)
-                
-                
-                    if ok2:
-                        bbox2 = dummy2
-                    else:  # If CSRT failed and more than 1 second has passed
-                        ok3, dummy3 = trackers[2][i].update(frame)
-                        if ok3:
-                            bbox3 = dummy3
-                
-
-            # if ok1:
-            #     bbox1 = dummy1
-
-
-            # ok2, dummy2 = trackers[1][i].update(frame)
-        
-        
-            # if ok2:
-            #     bbox2 = dummy2
-            # ok3, dummy3 = trackers[2][i].update(frame)
-            # if ok3:
-            #     bbox3 = dummy3
-            
-
-
-                drawn_centre = display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, boxes=boxes)
-                if drawn_centre != (0, 0):
-                    drawn_centres.append(drawn_centre)
-
-            count += len(line)
-
-
-            if len(drawn_centres) > 1:
-                for i in range(len(drawn_centres) - 1):
-                    cv2.line(frame, drawn_centres[i], drawn_centres[i+1], (200, 200, 0), 2)
-
-        # draw_smooth_line(frame, drawn_centres, color=(0, 255, 255), thickness=2)
-        
+            drawn_centres, count = line_handling(trackers, frame, count, flags=flags)
 
 
         

@@ -5,8 +5,8 @@ from polars import col
 
 FRAME_RESIZE = 1
 
-ALLOWANCE = 1.0  # Allowance for center point to be near edges
-SIZE_ALLOWANCE = 1.5  # Allowance for width comparison
+ALLOWANCE = 0.7  # Allowance for center point to be near edges
+SIZE_ALLOWANCE = 1.2  # Allowance for width comparison
 
 
 
@@ -15,14 +15,15 @@ def contains(box_1, box_2, allowance=ALLOWANCE):
     x1_1, y1_1, w1, h1 = box_1
     x2_1, y2_1, w2, h2 = box_2
 
-    allowance = w1 * allowance  # Convert allowance to pixels based on width of box_1
+    w_allowance = w1 * allowance  # Convert allowance to pixels based on width of box_1
+    h_allowance = h1 * allowance  # Convert allowance to pixels based on height of box_1
     
     # Calculate center of box_2
     center_x = x2_1 + w2 / 2
     center_y = y2_1 + h2 / 2
     
     # Check if center is inside box_1 with allowance (margin tolerance)
-    if (x1_1 - allowance <= center_x <= x1_1 + w1 + allowance) and (y1_1 - allowance <= center_y <= y1_1 + h1 + allowance):
+    if (x1_1 - w_allowance <= center_x <= x1_1 + w1 + w_allowance) and (y1_1 - h_allowance <= center_y <= y1_1 + h1 + h_allowance):
         return True
     return False
 
