@@ -241,29 +241,54 @@
                       </button>
                     </div>
 
-                    <!-- BUTTON BELOW TOOL RAIL -->
-                    <button
-                      type="button"
-                      class="btn btn-outline-secondary tool-btn active bottom mt-auto"
-                      id="toolTracker"
-                      title="Add tracker"
-                      aria-label="Add tracker"
+                    <!-- BUTTONS BELOW TOOL RAIL (BOTTOM STACK) -->
+                    <div
+                      class="d-flex flex-column align-items-center gap-2 mt-auto"
                     >
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path
-                          d="M12 5v14"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                        />
-                        <path
-                          d="M5 12h14"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                        />
-                      </svg>
-                    </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary tool-btn bottom"
+                        id="toolPolygon"
+                        title="Polygon tool"
+                        aria-label="Polygon tool"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path
+                            d="M6 6L18 8L16 18L8 16L6 6Z"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linejoin="round"
+                          />
+                          <circle cx="6" cy="6" r="1.5" fill="currentColor" />
+                          <circle cx="18" cy="8" r="1.5" fill="currentColor" />
+                          <circle cx="16" cy="18" r="1.5" fill="currentColor" />
+                          <circle cx="8" cy="16" r="1.5" fill="currentColor" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary tool-btn active bottom"
+                        id="toolTracker"
+                        title="Add tracker"
+                        aria-label="Add tracker"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path
+                            d="M12 5v14"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                          <path
+                            d="M5 12h14"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
 
                   <!-- CANVAS AREA (CENTER) + TRACKER SELECTORS (RIGHT) -->
@@ -423,7 +448,7 @@
       }
 
       // Create a green tracker button above the + button
-      function addTrackerButton() {
+      function addTrackerButton(num) {
         const btn = document.createElement("button");
         btn.type = "button";
 
@@ -438,12 +463,24 @@
         btn.style.backgroundColor = bg;
         btn.style.color = readableTextColorForRgbString(bg);
 
-        btn.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/>
-            <circle cx="12" cy="12" r="2" fill="currentColor"/>
-          </svg>
-        `;
+        if (num === 0) {
+          btn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/>
+              <circle cx="12" cy="12" r="2" fill="currentColor"/>
+            </svg>
+          `;
+        } else if (num === 1) {
+          btn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 6L18 8L16 18L8 16L6 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <circle cx="6" cy="6" r="1.5" fill="currentColor"/>
+              <circle cx="18" cy="8" r="1.5" fill="currentColor"/>
+              <circle cx="16" cy="18" r="1.5" fill="currentColor"/>
+              <circle cx="8" cy="16" r="1.5" fill="currentColor"/>
+            </svg>
+          `;
+        }
 
         trackerButtonList.appendChild(btn);
         trackerButtons.push(btn);
@@ -472,6 +509,9 @@
         const isAddTextMode = document
           .getElementById("toolText")
           .classList.contains("active");
+        const isAddPolygonMode = document
+          .getElementById("toolPolygon")
+          .classList.contains("active");
 
         if (!isAddArrowMode) {
           addingArrow = false;
@@ -479,7 +519,7 @@
 
         if (isAddTrackerMode) {
           // Create the UI button
-          addTrackerButton();
+          addTrackerButton(0);
 
           setStatus(`Added tracker at (${trackX}, ${trackY})`);
 
@@ -501,7 +541,7 @@
               end: end,
             });
           }
-        } else {
+        } else if (isAddTextMode) {
           setStatus(`Text tool clicked at (${trackX}, ${trackY})`);
           const userText = prompt("Enter text to add:");
           if (userText) {
@@ -512,6 +552,12 @@
               text: userText,
             });
           }
+        } else if (isAddPolygonMode) {
+          socket.emit("select_polygon", {
+            tracker_num: activeTracker,
+            x: trackX,
+            y: trackY,
+          });
         }
       });
 
@@ -524,6 +570,7 @@
         document.getElementById("toolArrow"),
         document.getElementById("toolText"),
         document.getElementById("toolTracker"),
+        document.getElementById("toolPolygon"),
       ];
 
       function setActiveTool(btn) {
@@ -532,6 +579,10 @@
 
         if (btn.id !== "toolArrow") {
           pendingArrowStart = null;
+          if (btn.id === "toolPolygon") {
+            addTrackerButton(1);
+            socket.emit("start_polygon", {});
+          }
         }
       }
 
