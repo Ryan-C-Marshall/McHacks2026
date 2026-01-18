@@ -3,108 +3,106 @@ import sys
 import numpy as np
 from kcf_to_csrt import contains
 
-from multibox_kcf_csrt import initialize_trackers
-
-FRAME_RESIZE = 12
-PATH = "videos/Echo/echo3.mp4"
-BOX_SIZE = 100  # Size of tracking box for each vertex
+FRAME_RESIZE = 10
+PATH = "videos/Echo/echo2.mp4"
+BOX_SIZE = 150  # Size of tracking box for each vertex
+KCF_WEIGHT = 0.9
+CSRT_WEIGHT = 0.8
 
 
 def draw_tracked_boxes(frame, trackers_data):
     """
-    Draw tracking boxes and compute weighted consensus from multiple trackers.
+    Optimized: Draw tracking boxes and compute weighted consensus from multiple trackers.
+    Uses NumPy vectorization for faster computation.
     
     Returns:
         frame: Frame with drawn boxes
         consensus_center: Center point of consensus box, or None if tracking failed
     """
     
-    for t in trackers_data:
-        for j in trackers_data:
-            if t != j and t['ok'] and j['ok'] and not(contains(t['bbox'], j['bbox'])):
-                j['ok'] = False
+    # Pre-filter successful trackers first to reduce iterations
+    successful_indices = [i for i, t in enumerate(trackers_data) if t['ok']]
     
-    # Filter successful trackers
+    if len(successful_indices) > 0:
+        # Only check containment among successful trackers
+        for i in successful_indices:
+            for j in successful_indices:
+                if i < j and not contains(trackers_data[i]['bbox'], trackers_data[j]['bbox']):
+                    # Mark the second one as failed (simpler logic)
+                    trackers_data[j]['ok'] = False
+    
+    # Filter successful trackers after containment check
     successful = [t for t in trackers_data if t['ok']]
     if not successful:
         return frame, None
     
-    # Calculate weights based on which trackers are active
-    weights = []
-    names = [t['name'] for t in successful]
+    num_trackers = len(successful)
+    weights = np.zeros(num_trackers)
     
-    if 'KCF' in names:
-        remaining = 0.3
-        for t in successful:
-            if t['name'] == 'KCF':
-                weights.append(0.7)
-            elif t['name'] == 'CSRT':
-                weights.append(0.75 * remaining)
-            else:
-                other_count = sum(1 for n in names if n not in ['KCF', 'CSRT'])
-                if 'CSRT' in names:
-                    weights.append((0.25 * remaining) / other_count if other_count > 0 else 0)
-                else:
-                    weights.append(remaining / other_count if other_count > 0 else 0)
-    else:
-        if 'CSRT' in names:
-            for t in successful:
-                if t['name'] == 'CSRT':
-                    weights.append(0.75)
-                else:
-                    other_count = sum(1 for n in names if n != 'CSRT')
-                    weights.append(0.25 / other_count if other_count > 0 else 0)
+    # Create name array for vectorized operations
+    names = np.array([t['name'] for t in successful])
+    
+    # Vectorized weight assignment
+    kcf_mask = names == 'KCF'
+    csrt_mask = names == 'CSRT'
+    other_mask = ~(kcf_mask | csrt_mask)
+    
+    if np.any(kcf_mask):
+        # KCF gets its weight
+        weights[kcf_mask] = KCF_WEIGHT
+        remaining = 1 - KCF_WEIGHT
+        
+        if np.any(csrt_mask):
+            # CSRT gets portion of remaining
+            weights[csrt_mask] = CSRT_WEIGHT * remaining
+            # Others split what's left
+            other_count = np.sum(other_mask)
+            if other_count > 0:
+                weights[other_mask] = (1 - CSRT_WEIGHT) * remaining / other_count
         else:
-            equal_weight = 1.0 / len(successful)
-            weights = [equal_weight] * len(successful)
+            # No CSRT, others split remaining
+            other_count = np.sum(other_mask)
+            if other_count > 0:
+                weights[other_mask] = remaining / other_count
+    else:
+        # No KCF
+        if np.any(csrt_mask):
+            weights[csrt_mask] = CSRT_WEIGHT
+            other_count = np.sum(other_mask)
+            if other_count > 0:
+                weights[other_mask] = (1 - CSRT_WEIGHT) / other_count
+        else:
+            # Equal weights for all
+            weights[:] = 1.0 / num_trackers
     
-    # Normalize weights
-    total_weight = sum(weights)
-    weights = [w / total_weight for w in weights]
+    # Normalize weights (vectorized)
+    weights = weights / np.sum(weights)
     
-    # Draw individual tracker boxes and collect points
-    all_p1 = []
-    all_p2 = []
+    # OPTIMIZATION 5: Vectorized point collection and consensus calculation
+    # Collect all points as numpy arrays
+    p1_array = np.array([(int(t['bbox'][0]), int(t['bbox'][1])) for t in successful])
+    p2_array = np.array([(int(t['bbox'][0] + t['bbox'][2]), 
+                          int(t['bbox'][1] + t['bbox'][3])) for t in successful])
     
-    for t, weight in zip(successful, weights):
-        bbox = t['bbox']
-        color = t['color']
-        name = t['name']
-        
-        p1 = (int(bbox[0]), int(bbox[1]))
-        p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
-        
-        #cv2.rectangle(frame, p1, p2, color, 1, 1)
-        
-        label_pos = (p1[0], p1[1] - 5)
-        #cv2.putText(frame, f"{name} {int(weight*100)}%", label_pos, 
-                   #cv2.FONT_HERSHEY_SIMPLEX, 0.3, color, 1)
-        
-        all_p1.append(p1)
-        all_p2.append(p2)
+    # Draw individual tracker boxes (optional, commented out for performance)
+    # for t, p1, p2 in zip(successful, p1_array, p2_array):
+    #     cv2.rectangle(frame, tuple(p1), tuple(p2), t['color'], 1, 1)
     
-    # Calculate consensus center
+    # Vectorized weighted mean calculation
     consensus_center = None
     if len(successful) > 0:
-        mean_p1 = (
-            int(sum(p[0] * w for p, w in zip(all_p1, weights))),
-            int(sum(p[1] * w for p, w in zip(all_p1, weights)))
-        )
-        mean_p2 = (
-            int(sum(p[0] * w for p, w in zip(all_p2, weights))),
-            int(sum(p[1] * w for p, w in zip(all_p2, weights)))
-        )
+        # Matrix multiplication for weighted average
+        mean_p1 = (weights @ p1_array).astype(int)
+        mean_p2 = (weights @ p2_array).astype(int)
         
-        # Draw consensus box in cyan
-        cv2.rectangle(frame, mean_p1, mean_p2, (0, 255, 255), 2, 1)
+        # Draw consensus box
+        cv2.rectangle(frame, tuple(mean_p1), tuple(mean_p2), (0, 255, 255), 2, 1)
         
-        # Calculate center of consensus box
-        consensus_center = (
-            (mean_p1[0] + mean_p2[0]) // 2,
-            (mean_p1[1] + mean_p2[1]) // 2
-        )
+        # Calculate center
+        consensus_center = tuple(((mean_p1 + mean_p2) // 2).tolist())
     
     return frame, consensus_center
+
 
 
 def select_polygon_roi(frame):
@@ -285,7 +283,7 @@ if __name__ == '__main__':
         # Create 3 trackers per vertex
         tracker_kcf = cv2.legacy.TrackerKCF_create()
         tracker_csrt = cv2.legacy.TrackerCSRT_create()
-        tracker_mf = cv2.legacy.TrackerBoosting_create()
+        tracker_mf = cv2.legacy.TrackerMOSSE_create()
         
         tracker_kcf.init(frame, bbox)
         tracker_csrt.init(frame, bbox)
@@ -297,7 +295,7 @@ if __name__ == '__main__':
             'trackers': [
                 {'tracker': tracker_kcf, 'name': 'KCF', 'color': (255, 0, 0)},
                 {'tracker': tracker_csrt, 'name': 'CSRT', 'color': (0, 255, 0)},
-                {'tracker': tracker_mf, 'name': 'MEDIANFLOW', 'color': (0, 0, 255)}
+                {'tracker': tracker_mf, 'name': 'MOSSE', 'color': (0, 0, 255)}
             ],
             'last_center': point
         })
