@@ -424,6 +424,79 @@
         [128, 0, 128], // Purple
       ];
 
+      function dist(a, b) {
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        return Math.hypot(dx, dy);
+      }
+
+      /**
+       * Resample a polyline to evenly spaced points along arc-length.
+       *
+       * @param {Array<{x:number,y:number}>} points - in TRACK coordinates (e.g. 640x480 space)
+       * @param {number} spacing - desired spacing in the same units as points (pixels in TRACK space)
+       * @param {number} maxPoints - optional cap; if exceeded we increase spacing automatically
+       * @returns {Array<{x:number,y:number}>}
+       */
+      function resampleBySpacing(points, spacing, maxPoints = Infinity) {
+        if (!points || points.length === 0) return [];
+        if (points.length === 1) return [points[0]];
+
+        // Compute total length
+        let total = 0;
+        for (let i = 1; i < points.length; i++)
+          total += dist(points[i - 1], points[i]);
+
+        // Degenerate: all points same
+        if (total === 0) return [points[0]];
+
+        // If too many points would be generated, increase spacing (keeps shape)
+        const estCount = Math.floor(total / spacing) + 1;
+        if (estCount > maxPoints) {
+          spacing = total / (maxPoints - 1);
+        }
+
+        const out = [];
+        out.push({ x: points[0].x, y: points[0].y });
+
+        let target = spacing; // distance along path where we want next point
+        let accum = 0;
+
+        for (let i = 1; i < points.length && out.length < maxPoints; i++) {
+          const p0 = points[i - 1];
+          const p1 = points[i];
+          const segLen = dist(p0, p1);
+          if (segLen === 0) continue;
+
+          // While the next target falls within this segment, interpolate
+          while (accum + segLen >= target && out.length < maxPoints) {
+            const t = (target - accum) / segLen; // 0..1
+            out.push({
+              x: p0.x + t * (p1.x - p0.x),
+              y: p0.y + t * (p1.y - p0.y),
+            });
+            target += spacing;
+          }
+
+          accum += segLen;
+        }
+
+        // Ensure last point included
+        const last = points[points.length - 1];
+        const lastOut = out[out.length - 1];
+        if (lastOut.x !== last.x || lastOut.y !== last.y)
+          out.push({ x: last.x, y: last.y });
+
+        // If we somehow exceeded maxPoints because of the forced last point, trim but keep last
+        if (out.length > maxPoints) {
+          const trimmed = out.slice(0, maxPoints);
+          trimmed[maxPoints - 1] = { x: last.x, y: last.y };
+          return trimmed;
+        }
+
+        return out;
+      }
+
       function trackerColorCss(idx) {
         const bgr = TRACKER_COLOURS_BGR[idx % TRACKER_COLOURS_BGR.length];
         const r = bgr[2],
@@ -658,11 +731,6 @@
           .classList.contains("active");
         if (!isStrokeMode) return;
 
-        if (activeTracker === -1) {
-          setStatus("No tracker selected");
-          return;
-        }
-
         canvas.setPointerCapture(e.pointerId);
 
         const { trackX, trackY } = canvasToTrackCoords(e);
@@ -700,24 +768,18 @@
           return;
         }
 
-        // Optional: simplify a bit before sending (keeps bandwidth sane)
-        // Simple decimation: keep every Nth point if huge
         const MAX_POINTS = 300;
-        let ptsToSend = strokePts;
-        if (strokePts.length > MAX_POINTS) {
-          const step = Math.ceil(strokePts.length / MAX_POINTS);
-          ptsToSend = strokePts.filter((_, i) => i % step === 0);
-          // ensure last point kept
-          if (
-            ptsToSend[ptsToSend.length - 1] !== strokePts[strokePts.length - 1]
-          ) {
-            ptsToSend.push(strokePts[strokePts.length - 1]);
-          }
-        }
 
-        socket.emit("add_stroke", {
+        const SPACING = 30;
+
+        let ptsToSend = resampleBySpacing(strokePts, SPACING, MAX_POINTS);
+
+        console.log(strokePts);
+        console.log(ptsToSend);
+
+        socket.emit("set_line_points", {
           tracker_num: activeTracker,
-          points: ptsToSend, // [{x,y}, {x,y}, ...] in TRACK coords
+          points: ptsToSend,
         });
 
         setStatus(`Stroke added (${ptsToSend.length} pts)`);
@@ -748,6 +810,7 @@
             socket.emit("start_polygon");
           } else if (btn.id === "toolLine") {
             addTrackerButton(2);
+            socket.emit("create_line");
           }
         }
       }
