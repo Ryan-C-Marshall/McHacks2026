@@ -5,7 +5,7 @@ from polars import col
 
 FRAME_RESIZE = 1
 
-ALLOWANCE = 0.5  # Allowance for center point to be near edges
+ALLOWANCE = 0.2 # Allowance for center point to be near edges
 SIZE_ALLOWANCE = 1.2  # Allowance for width comparison
 
 
