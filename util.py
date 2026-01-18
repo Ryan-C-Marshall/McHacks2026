@@ -20,8 +20,11 @@ class FundamentalTracker():
         self.tracker.init(frame, bbox0)
 
 class Tracker():
-    def __init__(self, state):
-        self.tracker_num = len(state["trackers"])
+    def __init__(self, state, tracker_num=None):
+        if tracker_num is None:
+            self.tracker_num = len(state["trackers"])
+        else:
+            self.tracker_num = tracker_num
 
         self.colour = generate_tracker_colour(self.tracker_num)
 
@@ -35,7 +38,7 @@ class Tracker():
         pass
         
 class BoxTracker(Tracker):
-    def __init__(self, state, box_size, pt, frame):
+    def __init__(self, state, box_size, pt, frame, tracker_num=None):
         h, w = frame.shape[:2]
 
         self.box_size = box_size
@@ -43,7 +46,6 @@ class BoxTracker(Tracker):
         self.bbox0 = make_square_bbox(pt, box_size, w, h)
         self.last_bbox = self.bbox0
 
-        
         self.fundamental_trackers: list[FundamentalTracker] = []
 
         # Initialize fundamental trackers
@@ -51,7 +53,7 @@ class BoxTracker(Tracker):
         self.fundamental_trackers.append(FundamentalTracker("CSRT", frame, self.bbox0))
         self.fundamental_trackers.append(FundamentalTracker("MEDIANFLOW", frame, self.bbox0))
 
-        super().__init__(state)
+        super().__init__(state, tracker_num=tracker_num)
         self.update(state, frame, paused=False)
 
     def update(self, state, frame, paused=None):
@@ -69,12 +71,28 @@ class PolygonTracker(Tracker):
         super().__init__(state)
 
     def add_point(self, state, box_size, pt, frame):
-        new_tracker = BoxTracker(state, box_size, pt, frame)
+        new_tracker = BoxTracker(state, box_size, pt, frame, tracker_num=self.tracker_num)
         self.points.append(new_tracker)
 
     def update(self, state, frame, paused=None):
         for pt_tracker in self.points:
             pt_tracker.update(state, frame)
+        
+        # Draw lines between adjacent trackers
+        if len(self.points) > 1:
+            centers = []
+            for pt_tracker in self.points:
+                x, y, w, h = pt_tracker.last_bbox
+                cx = int(x + w / 2)
+                cy = int(y + h / 2)
+                centers.append((cx, cy))
+            
+            # Draw lines between consecutive centers
+            for i in range(len(centers) - 1):
+                cv2.line(frame, centers[i], centers[i + 1], self.colour, 2)
+            
+            # Close the polygon by drawing line from last to first
+            cv2.line(frame, centers[-1], centers[0], self.colour, 2)
 
 
 def pick_tracker(tracker_type):
