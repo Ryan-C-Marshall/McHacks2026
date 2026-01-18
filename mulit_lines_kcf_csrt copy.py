@@ -472,7 +472,7 @@ def start_line_tracking(bboxes, frame):
     trackers = initialize_trackers(flat, frame)
 
     for tracker in trackers:
-        print(tracker)
+        print(len(tracker))
     flags = [True] * len(flat)
     return trackers, flags
 
