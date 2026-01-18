@@ -3,7 +3,7 @@ from flask import Flask, render_template, make_response, request
 from flask_socketio import SocketIO
 import cv2
 
-from util import load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH
+from util import load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH, delete_tracker, STATE_LOCK
 
 tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 
@@ -99,6 +99,15 @@ def start_tracking():
 def pause_tracking():
     state["paused"] = True
     socketio.emit("status", "Pausing...")
+
+@socketio.on("delete_tracker")
+def handle_delete(data):
+    idx = data.get("tracker_num")
+
+    with STATE_LOCK:
+        delete_tracker(state, idx)
+
+    socketio.emit("status", f"Deleted tracker {idx}")
 
 
 if __name__ == "__main__":
