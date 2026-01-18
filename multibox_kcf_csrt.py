@@ -435,8 +435,11 @@ def update_lines(trackers, frame, boxes, i, flags, bbox1, bbox2, bbox3):
     
     drawn_centre, pts = define_boxes(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, boxes=boxes)
     
-    if drawn_centre != (0, 0):
-        points_to_draw.append(drawn_centre)
+    # if drawn_centre != (0, 0):
+    #     points_to_draw.append(drawn_centre)
+
+    if pts != ((0, 0), (0, 0)):
+        points_to_draw.append(pts)
 
     return bbox1, bbox2, bbox3, points_to_draw
 
@@ -452,7 +455,9 @@ def active_line_tracking(trackers, frame, line=[[]], count=0, flags=[True], bbox
         drawn_centres.extend(points_to_draw)
 
     count += len(line)
-    return drawn_centres, count
+
+    # return drawn_centres, count
+    return points_to_draw, count
 
 def draw_lines(frame, drawn_centres):
 
@@ -506,6 +511,7 @@ if __name__ == '__main__':
         #     draw_lines(frame, drawn_centres)
         
         drawn_centres, count = active_line_tracking(trackers, frame)
+        print(drawn_centres)
         draw_lines(frame, drawn_centres)
 
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
