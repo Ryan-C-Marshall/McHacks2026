@@ -100,7 +100,7 @@ def define_boxes(bbox1, bbox2, bbox3, ok1=True, ok2=True, ok3=True, frame=None, 
 
         return drawn_center, pts
 
-def multi_line_select(frame, box_width=50, box_height=50, spacing=30):
+def multi_line_select(frame, box_width=BOX_WIDTH, box_height=BOX_HEIGHT, spacing=BOX_SPACING):
     """
     Allow user to trace multiple lines, then create boxes centered at points along each line.
     
@@ -435,12 +435,15 @@ def update_lines(trackers, frame, boxes, i, flags, bbox1, bbox2, bbox3):
     
     drawn_centre, pts = define_boxes(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, boxes=boxes)
     
-    if drawn_centre != (0, 0):
-        points_to_draw.append(drawn_centre)
+    # if drawn_centre != (0, 0):
+    #     points_to_draw.append(drawn_centre)
+
+    if pts != ((0, 0), (0, 0)):
+        points_to_draw.append(pts)
 
     return bbox1, bbox2, bbox3, points_to_draw
 
-def active_line_tracking(trackers, frame, line=[[]], count=0, flags=[True], bbox1=(0, 0, 0, 0), bbox2=(0, 0, 0, 0), bbox3=(0, 0, 0, 0)):
+def fast_track(trackers, frame, line=[[]], count=0, flags=[True], bbox1=(0, 0, 0, 0), bbox2=(0, 0, 0, 0), bbox3=(0, 0, 0, 0)):
     drawn_centres = []
     boxes = BOXES
     if len(line) == 1:
@@ -449,10 +452,12 @@ def active_line_tracking(trackers, frame, line=[[]], count=0, flags=[True], bbox
 
     for i in range(count, count + len(line)): # Updating trackers for all the boxes in the current line
         bbox1, bbox2, bbox3, points_to_draw = update_lines(trackers, frame, boxes, i, flags, bbox1, bbox2, bbox3)
-        drawn_centres.extend(points_to_draw)
+        drawn_centres.append(points_to_draw)
 
     count += len(line)
-    return drawn_centres, count
+
+    # return drawn_centres, count
+    return points_to_draw, count
 
 def draw_lines(frame, drawn_centres):
 
@@ -462,7 +467,7 @@ def draw_lines(frame, drawn_centres):
             cv2.line(frame, drawn_centres[i], drawn_centres[i+1], (200, 200, 0), 2)
 
 def start_line_tracking(bboxes, frame):
-    flat = list(itertools.chain.from_iterable(all_bboxes))
+    flat = list(itertools.chain.from_iterable(bboxes))
 
 
     trackers = initialize_trackers(flat, frame)
@@ -482,7 +487,7 @@ if __name__ == '__main__':
     # Let user select multiple lines and create boxes along them
 
     all_bboxes = [[(323, 487, 100, 100), (330, 448, 100, 100), (336, 411, 100, 100), (336, 371, 100, 100), (336, 331, 100, 100), (361, 316, 100, 100), (400, 314, 100, 100), (438, 321, 100, 100), (475, 330, 100, 100), (513, 335, 100, 100)], [(416, 4, 100, 100), (417, 43, 100, 100), (419, 82, 100, 100), (417, 122, 100, 100), (406, 154, 100, 100)], [(214, 36, 100, 100), (193, 65, 100, 100), (191, 104, 100, 100), (181, 140, 100, 100), (185, 172, 100, 100), (209, 198, 100, 100), (232, 225, 100, 100), (254, 252, 100, 100), (279, 278, 100, 100)]]
-    all_bboxes = multi_line_select(frame, box_width=BOX_WIDTH, box_height=BOX_HEIGHT, spacing=BOX_SPACING)
+    all_bboxes = multi_line_select(frame)
     
     trackers, flags = start_line_tracking(all_bboxes, frame)
 
@@ -496,17 +501,16 @@ if __name__ == '__main__':
         timer = cv2.getTickCount()
 
 
-        # count = 0
-        # for line in all_bboxes:
-        #     drawn_centres, count = active_line_tracking(trackers, frame, line, count, flags=flags)
-        #     draw_lines(frame, drawn_centres)
-        # count = 0
-        # for line in all_bboxes:
-        #     drawn_centres, count = active_line_tracking(trackers, frame, line, count, flags=flags)
-        #     draw_lines(frame, drawn_centres)
+        count = 0
+        for line in all_bboxes:
+            drawn_centres, count = fast_track(trackers, frame, line, count, flags=flags)
+            print(drawn_centres)
+            draw_lines(frame, drawn_centres)
+
         
-        drawn_centres, count = active_line_tracking(trackers, frame)
-        draw_lines(frame, drawn_centres)
+        # drawn_centres, count = fast_track(trackers, frame)
+        # print(drawn_centres)
+        # draw_lines(frame, drawn_centres)
 
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
         cv2.putText(frame, f"FPS: {int(fps)}", (10, 30), 
