@@ -58,7 +58,7 @@ class BoxTracker(Tracker):
         # Initialize fundamental trackers
         self.fundamental_trackers.append(FundamentalTracker("KCF", frame, self.bbox0))
         self.fundamental_trackers.append(FundamentalTracker("CSRT", frame, self.bbox0))
-        self.fundamental_trackers.append(FundamentalTracker("MEDIANFLOW", frame, self.bbox0))
+        self.fundamental_trackers.append(FundamentalTracker("MOSSE", frame, self.bbox0))
 
         super().__init__(state, tracker_num=tracker_num)
         self.update(state, frame, paused=False)
@@ -99,8 +99,16 @@ class LineTracker(Tracker):
             self.points.append(new_tracker)
 
     def update(self, state, frame, paused=None):
+        # Start threads for concurrent updates
+        threads = []
         for pt_tracker in self.points:
-            pt_tracker.update(state, frame, quick_track=True)
+            t = threading.Thread(target=pt_tracker.update, args=(state, frame, paused, True))
+            threads.append(t)
+            t.start()
+        
+        # Wait for all threads to complete
+        for t in threads:
+            t.join()
         
         # Draw lines between adjacent trackers
         if len(self.points) > 1:
@@ -142,8 +150,16 @@ class PolygonTracker(Tracker):
         self.points.append(new_tracker)
 
     def update(self, state, frame, paused=None):
+        # Start threads for concurrent updates
+        threads = []
         for pt_tracker in self.points:
-            pt_tracker.update(state, frame)
+            t = threading.Thread(target=pt_tracker.update, args=(state, frame, paused))
+            threads.append(t)
+            t.start()
+        
+        # Wait for all threads to complete
+        for t in threads:
+            t.join()
         
         # Draw lines between adjacent trackers
         if len(self.points) > 1:
@@ -200,7 +216,7 @@ def pick_tracker(tracker_type):
         if tracker_type == 'GOTURN':
             return cv2.TrackerGOTURN_create()
         if tracker_type == 'MOSSE':
-            return cv2.TrackerMOSSE_create()
+            return cv2.legacy.TrackerMOSSE_create()
         if tracker_type == "CSRT":
             return cv2.TrackerCSRT_create()
 
@@ -337,8 +353,12 @@ def update_box_tracker(state, frame, tracker_obj: BoxTracker, paused=None, quick
     mean_p1, mean_p2 = outputs
 
     # Save consensus bbox as this ROI's anchor for text/arrows
-    tracker_obj.last_bbox = (mean_p1[0], mean_p1[1],
-                                mean_p2[0] - mean_p1[0], mean_p2[1] - mean_p1[1])
+    try:
+        tracker_obj.last_bbox = (mean_p1[0], mean_p1[1],
+                                    mean_p2[0] - mean_p1[0], mean_p2[1] - mean_p1[1])
+    except Exception as e:
+        print("Error computing consensus bbox:", e)
+        return
 
     cons_w = float(mean_p2[0] - mean_p1[0])
     cons_h = float(mean_p2[1] - mean_p1[1])
