@@ -18,6 +18,7 @@
         width: 100%;
         height: 100%;
         display: block;
+        touch-action: none;
       }
 
       /* Left tool buttons */
@@ -380,6 +381,38 @@
       const trackerButtons = [];
       let activeTracker = -1;
 
+      let drawingLine = false;
+      let lineStart = null;
+      let lastHover = null;
+
+      let drawingStroke = false;
+      let strokePts = []; // array of {x,y} in TRACK coords
+
+      function dist2(a, b) {
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        return dx * dx + dy * dy;
+      }
+
+      function cssFromTrack(pt) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: (pt.x / TARGET_W) * rect.width,
+          y: (pt.y / TARGET_H) * rect.height,
+        };
+      }
+
+      function canvasToTrackCoords(e) {
+        const rect = canvas.getBoundingClientRect();
+        const cssX = e.clientX - rect.left;
+        const cssY = e.clientY - rect.top;
+
+        const trackX = Math.round((cssX / rect.width) * TARGET_W);
+        const trackY = Math.round((cssY / rect.height) * TARGET_H);
+
+        return { trackX, trackY, rect, cssX, cssY };
+      }
+
       const TRACKER_COLOURS_BGR = [
         [0, 255, 0], // Green
         [255, 0, 0], // Blue   (BGR -> RGB => 0,0,255)
@@ -423,6 +456,31 @@
         canvas.height = Math.round(rect.height * dpr);
 
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function drawPreviewStroke() {
+        if (!drawingStroke || strokePts.length < 2) return;
+
+        const color = trackerColorCss(activeTracker);
+
+        // Draw on top of the current frame already present on the canvas
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.strokeStyle = color; // preview color only
+
+        const p0 = cssFromTrack(strokePts[0]);
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+
+        for (let i = 1; i < strokePts.length; i++) {
+          const p = cssFromTrack(strokePts[i]);
+          ctx.lineTo(p.x, p.y);
+        }
+
+        ctx.stroke();
+        ctx.restore();
       }
 
       window.addEventListener("resize", resizeCanvasToContainer);
@@ -497,6 +555,14 @@
               <circle cx="8" cy="16" r="1.5" fill="currentColor"/>
             </svg>
           `;
+        } else {
+          btn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 18L18 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="6" cy="18" r="1.5" fill="currentColor"/>
+              <circle cx="18" cy="6" r="1.5" fill="currentColor"/>
+            </svg>
+          `;
         }
 
         trackerButtonList.appendChild(btn);
@@ -529,9 +595,9 @@
         const isAddPolygonMode = document
           .getElementById("toolPolygon")
           .classList.contains("active");
-        // const isAddLineMode = document
-        //   .getElementById("toolLine")
-        //   .classList.contains("active");
+        const isAddLineMode = document
+          .getElementById("toolLine")
+          .classList.contains("active");
 
         if (!isAddArrowMode) {
           addingArrow = false;
@@ -578,7 +644,84 @@
             x: trackX,
             y: trackY,
           });
+        } else if (isAddLineMode) {
+          return;
         }
+      });
+
+      /* 
+        Click and drag
+      */
+      canvas.addEventListener("pointerdown", (e) => {
+        const isStrokeMode = document
+          .getElementById("toolLine")
+          .classList.contains("active");
+        if (!isStrokeMode) return;
+
+        if (activeTracker === -1) {
+          setStatus("No tracker selected");
+          return;
+        }
+
+        canvas.setPointerCapture(e.pointerId);
+
+        const { trackX, trackY } = canvasToTrackCoords(e);
+        drawingStroke = true;
+        strokePts = [{ x: trackX, y: trackY }];
+
+        setStatus(`Stroke started at (${trackX}, ${trackY})`);
+      });
+
+      canvas.addEventListener("pointermove", (e) => {
+        if (!drawingStroke) return;
+
+        const { trackX, trackY } = canvasToTrackCoords(e);
+        const next = { x: trackX, y: trackY };
+
+        // Throttle point density: only add if moved enough (in TRACK pixels)
+        const last = strokePts[strokePts.length - 1];
+        const MIN_DIST2 = 4; // 2px squared in track space; adjust if needed
+        if (dist2(last, next) < MIN_DIST2) return;
+
+        strokePts.push(next);
+
+        // draw live preview
+        drawPreviewStroke();
+      });
+
+      canvas.addEventListener("pointerup", (e) => {
+        if (!drawingStroke) return;
+        drawingStroke = false;
+
+        // If they barely moved, ignore
+        if (strokePts.length < 2) {
+          setStatus("Stroke cancelled (too short)");
+          strokePts = [];
+          return;
+        }
+
+        // Optional: simplify a bit before sending (keeps bandwidth sane)
+        // Simple decimation: keep every Nth point if huge
+        const MAX_POINTS = 300;
+        let ptsToSend = strokePts;
+        if (strokePts.length > MAX_POINTS) {
+          const step = Math.ceil(strokePts.length / MAX_POINTS);
+          ptsToSend = strokePts.filter((_, i) => i % step === 0);
+          // ensure last point kept
+          if (
+            ptsToSend[ptsToSend.length - 1] !== strokePts[strokePts.length - 1]
+          ) {
+            ptsToSend.push(strokePts[strokePts.length - 1]);
+          }
+        }
+
+        socket.emit("add_stroke", {
+          tracker_num: activeTracker,
+          points: ptsToSend, // [{x,y}, {x,y}, ...] in TRACK coords
+        });
+
+        setStatus(`Stroke added (${ptsToSend.length} pts)`);
+        strokePts = [];
       });
 
       const bboxToggle = document.getElementById("bboxToggle");
@@ -603,6 +746,8 @@
           if (btn.id === "toolPolygon") {
             addTrackerButton(1);
             socket.emit("start_polygon");
+          } else if (btn.id === "toolLine") {
+            addTrackerButton(2);
           }
         }
       }
