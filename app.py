@@ -42,14 +42,8 @@ def _bbox_offsets_from_abs_click(tracker_obj: dict, x: int, y: int):
     bx, by, bw, bh = bbox
     return (int(x - bx), int(y - by))
 
+
 @app.route("/")
-def index():
-    state["video_path"] = request.args.get("video", DEFAULT_VIDEO_PATH)
-
-    return render_template("index.html")
-
-
-@app.route("/landing")
 def landing():
     videos = load_videos_from_directory()
     return render_template("landing_page.html", videos=videos)
