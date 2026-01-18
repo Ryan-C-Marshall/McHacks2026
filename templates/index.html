@@ -312,6 +312,8 @@
       const statusDiv = document.getElementById("status");
       const deleteTrackerBtn = document.getElementById("deleteTrackerBtn");
 
+      let addingArrow = false;
+
       let pendingArrowStart = null;
 
       let trackerCount = 0;
@@ -443,6 +445,10 @@
           .getElementById("toolText")
           .classList.contains("active");
 
+        if (!isAddArrowMode) {
+          addingArrow = false;
+        }
+
         if (isAddTrackerMode) {
           // Create the UI button
           addTrackerButton();
@@ -452,12 +458,21 @@
           // Otherwise normal behavior
           socket.emit("select_point", { x: trackX, y: trackY });
         } else if (isAddArrowMode) {
-          setStatus(`Arrow tool clicked at (${trackX}, ${trackY})`);
-          socket.emit("add_arrow", {
-            tracker_num: activeTracker,
-            x: trackX,
-            y: trackY,
-          });
+          if (!addingArrow) {
+            setStatus(`Arrow tool clicked at (${trackX}, ${trackY})`);
+            start = { x: trackX, y: trackY };
+            addingArrow = true;
+          } else {
+            setStatus(`Arrow tool clicked at (${trackX}, ${trackY})`);
+            end = { x: trackX, y: trackY };
+            addingArrow = false;
+
+            socket.emit("add_arrow", {
+              tracker_num: activeTracker,
+              start: start,
+              end: end,
+            });
+          }
         } else {
           setStatus(`Text tool clicked at (${trackX}, ${trackY})`);
           const userText = prompt("Enter text to add:");

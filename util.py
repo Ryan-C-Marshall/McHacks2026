@@ -102,21 +102,18 @@ def create_new_tracker(state, tracker_type, box_size, frame, socketio):
     # new_tracker["texts"] = [(f"{tracker_type} Tracker ({len(state['trackers']) + 1})", (10, -20))]
     # new_tracker["arrows"] = [((0, 0), (box_size, box_size))]
 
-        new_tracker["tracker"].init(frame, bbox0)
-        
-        ok_init, bbox = new_tracker["tracker"].update(frame)
-        new_tracker["tracker_inited"] = bool(ok_init)
-        new_tracker["last_bbox"] = bbox if ok_init else bbox0
-        
-        if not new_tracker["tracker_inited"]:
-            new_tracker["tracker"] = None
-        
-        with STATE_LOCK:
-            state["trackers"].append(new_tracker)
-        socketio.emit("status", f"Tracker initialized ({tracker_type}): {new_tracker['tracker_inited']}")
-
-    except Exception as e:
-        socketio.emit("status", f"Tracker init failed ({tracker_type}): {e}")
+    new_tracker["tracker"].init(frame, bbox0)
+    
+    ok_init, bbox = new_tracker["tracker"].update(frame)
+    new_tracker["tracker_inited"] = bool(ok_init)
+    new_tracker["last_bbox"] = bbox if ok_init else bbox0
+    
+    if not new_tracker["tracker_inited"]:
+        new_tracker["tracker"] = None
+    
+    with STATE_LOCK:
+        state["trackers"].append(new_tracker)
+    socketio.emit("status", f"Tracker initialized ({tracker_type}): {new_tracker['tracker_inited']}")
     
 def delete_tracker(state, tracker_num):
     with STATE_LOCK:
