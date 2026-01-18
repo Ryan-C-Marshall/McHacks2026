@@ -3,7 +3,7 @@ from flask import Flask, render_template, make_response, request
 from flask_socketio import SocketIO
 import cv2
 
-from util import BoxTracker, load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH, delete_tracker, STATE_LOCK, add_arrow_to_tracker, add_text_to_tracker, Tracker, PolygonTracker
+from util import BoxTracker, LineTracker, load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH, delete_tracker, STATE_LOCK, add_arrow_to_tracker, add_text_to_tracker, Tracker, PolygonTracker
 
 tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 
@@ -25,6 +25,7 @@ state = {
     "clicked_pt": None,
     "create_new_tracker_type": None, # "BOX", "LINE", "POLYGON"
     "add_point_to_polygon_tracker": None, # (tracker_idx, (x,y))
+    "add_points_to_line": None,  # (idx, [(x1,y1), (x2,y2), ...])
     "trackers": [],     # tracker, tracker_inited
     "show_bbox": False,
     "resume_frame": 0,
@@ -38,7 +39,7 @@ def _bbox_offsets_from_abs_click(tracker_obj: Tracker, x: int, y: int):
     """Convert absolute frame coords (x,y) to offsets relative to latest bbox.
     Returns {"closest_tracker_index": index, "offsets": (dx, dy)} or None if bbox not available.
     """
-    if isinstance(tracker_obj, PolygonTracker):
+    if isinstance(tracker_obj, PolygonTracker) or isinstance(tracker_obj, LineTracker):
         min_dist = float('inf')
         closest_idx = -1
         for i, point in enumerate(tracker_obj.points):
@@ -89,7 +90,7 @@ def index():
         state["tracking_active"] = False
         state["paused"] = False
         state["resume_frame"] = 0
-        state["show_bbox"] = True
+        state["show_bbox"] = False
         state["video_path"] = request.args.get("video", DEFAULT_VIDEO_PATH)
     start_tracking()
     return render_template("index.html")
@@ -129,6 +130,17 @@ def on_select_polygon(data):
         
         state["add_point_to_polygon_tracker"] = (idx, (int(data["x"]), int(data["y"])))
     socketio.emit("status", f"Polygon selected. Tracker {state['create_new_tracker_type']} will initialize on next frame.")
+
+@socketio.on("create_line")
+def on_create_line():
+    with STATE_LOCK:
+        state["create_new_tracker_type"] = "LINE"
+
+@socketio.on("set_line_points")
+def on_set_line_points(data):
+    with STATE_LOCK:
+        idx = int(data.get("tracker_num"))
+        state["add_points_to_line"] = (idx, [(pt["x"], pt["y"]) for pt in data.get("points", [])])
 
 @socketio.on("toggle_bbox")
 def on_toggle_bbox(data):
