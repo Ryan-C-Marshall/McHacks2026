@@ -3,7 +3,7 @@ import sys
 import math
 from polars import col
 
-FRAME_RESIZE = 8
+FRAME_RESIZE = 1
 
 ALLOWANCE = 1.0  # Allowance for center point to be near edges
 SIZE_ALLOWANCE = 1.5  # Allowance for width comparison
@@ -183,7 +183,7 @@ if __name__ == '__main__':
         
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
 
-        
+
         
         if ok1:
             # Draw bounding box from tracker 1
