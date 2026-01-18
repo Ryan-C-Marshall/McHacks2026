@@ -103,7 +103,6 @@ def on_start_polygon():
 
 @socketio.on("select_polygon")
 def on_select_polygon(data):
-
     with STATE_LOCK:
         idx = int(data.get("tracker_num"))
 

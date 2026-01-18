@@ -20,20 +20,14 @@ class FundamentalTracker():
         self.tracker.init(frame, bbox0)
 
 class Tracker():
-    def __init__(self, state, box_size, pt, frame):
+    def __init__(self, state):
         self.tracker_num = len(state["trackers"])
-
-        h, w = frame.shape[:2]
-
-        self.bbox0 = make_square_bbox(pt, box_size, w, h)
-        self.last_bbox = self.bbox0
 
         self.colour = generate_tracker_colour(self.tracker_num)
 
         self.texts = []
         self.arrows = []
         
-        self.update(state, frame, paused=False)
         self.tracker_inited = True
 
     def update(self, state, frame, paused=False):
@@ -47,6 +41,8 @@ class BoxTracker(Tracker):
         self.box_size = box_size
 
         self.bbox0 = make_square_bbox(pt, box_size, w, h)
+        self.last_bbox = self.bbox0
+
         
         self.fundamental_trackers: list[FundamentalTracker] = []
 
@@ -55,10 +51,11 @@ class BoxTracker(Tracker):
         self.fundamental_trackers.append(FundamentalTracker("CSRT", frame, self.bbox0))
         self.fundamental_trackers.append(FundamentalTracker("MEDIANFLOW", frame, self.bbox0))
 
-        super().__init__(state, box_size, pt, frame)
+        super().__init__(state)
+        self.update(state, frame, paused=False)
 
     def update(self, state, frame, paused=None):
-        update_box_tracker(state, frame, self)
+        update_box_tracker(state, frame, self, paused)
 
 class LineTracker(Tracker):
     def __init__(self, state, box_size, pt, frame):
@@ -66,14 +63,14 @@ class LineTracker(Tracker):
         # super().__init__(state, box_size, pt, frame)
 
 class PolygonTracker(Tracker):
-    def __init__(self, state, box_size, pt, frame):
-        h, w = frame.shape[:2]
+    def __init__(self, state):
         self.points: list[BoxTracker] = []
 
-        super().__init__(state, box_size, pt, frame)
+        super().__init__(state)
 
     def add_point(self, state, box_size, pt, frame):
         new_tracker = BoxTracker(state, box_size, pt, frame)
+        self.points.append(new_tracker)
 
     def update(self, state, frame, paused=None):
         for pt_tracker in self.points:
@@ -171,21 +168,22 @@ def create_new_tracker(state, box_size, frame, socketio):
     if tracker_type not in ["BOX", "LINE", "POLYGON"]:
         socketio.emit("status", f"Error: Unknown tracker type: {tracker_type}")
         return
-    
+        
     with STATE_LOCK:
         pt = state.get("clicked_pt")
         state["clicked_pt"] = None
     
-    if pt is None:
-        return
-        
     new_tracker: Tracker | None = None
     if tracker_type == "BOX":
+        if pt is None:
+            return
+        
         new_tracker = BoxTracker(state, box_size, pt, frame)
     elif tracker_type == "LINE":
         new_tracker = LineTracker() # TODO
     elif tracker_type == "POLYGON":
-        new_tracker = PolygonTracker() # TODO
+        print("Creating polygon tracker")
+        new_tracker = PolygonTracker(state) # TODO
     
     if not new_tracker:
         socketio.emit("status", f"Error: Could not create tracker of type: {tracker_type}")
