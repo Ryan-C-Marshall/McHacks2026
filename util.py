@@ -3,6 +3,7 @@ import base64
 import threading
 
 from tracker_fusion import draw_tracked_boxes
+from lines_kcf_csrt import draw_lines
 
 STATE_LOCK = threading.RLock()
 
@@ -65,7 +66,6 @@ class BoxTracker(Tracker):
     def update(self, state, frame, paused=None):
         update_box_tracker(state, frame, self, paused)
 
-
         # Now draw your existing overlay items using the consensus bbox as the origin
         x, y, _, _ = self.last_bbox
 
@@ -88,9 +88,48 @@ class BoxTracker(Tracker):
 
 
 class LineTracker(Tracker):
-    def __init__(self, state, box_size, pt, frame):
-        pass
-        # super().__init__(state, box_size, pt, frame)
+    def __init__(self, state, box_size, frame):
+        self.points: list[BoxTracker] = []
+
+        super().__init__(state)
+
+    def add_points(self, state, box_size, pts, frame):
+        for pt in pts:
+            new_tracker = BoxTracker(state, box_size, pt, frame, tracker_num=self.tracker_num)
+            self.points.append(new_tracker)
+
+    def update(self, state, frame, paused=None):
+        for pt_tracker in self.points:
+            pt_tracker.update(state, frame)
+        
+        # Draw lines between adjacent trackers
+        if len(self.points) > 1:
+            centers = []
+            for pt_tracker in self.points:
+                x, y, w, h = pt_tracker.last_bbox
+                cx = int(x + w / 2)
+                cy = int(y + h / 2)
+                centers.append((cx, cy))
+            draw_lines(frame, centers)
+        
+        # Draw texts and arrows for each point
+        for text, pos in self.texts:
+            idx = pos["closest_tracker_index"]
+            dx, dy = pos["offsets"]
+            if idx < len(self.points):
+                px, py, _, _ = self.points[idx].last_bbox
+                cv2.putText(frame, text, (int(px) + dx, int(py) + dy + 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colour, 2)
+        
+        for start_pos, end_pos in self.arrows:
+            idx = start_pos["closest_tracker_index"]
+            sx, sy = start_pos["offsets"]
+            ex, ey = end_pos["offsets"]
+            if idx < len(self.points):
+                px, py, _, _ = self.points[idx].last_bbox
+                cv2.arrowedLine(frame, (int(px) + sx, int(py) + sy),
+                                (int(px) + ex, int(py) + ey),
+                                self.colour, 2, tipLength=0.2)
 
 class PolygonTracker(Tracker):
     def __init__(self, state):
@@ -132,7 +171,7 @@ class PolygonTracker(Tracker):
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colour, 2)
         
         for start_pos, end_pos in self.arrows:
-            idx = start_pos["closest_tracker_index"]  # assume same
+            idx = start_pos["closest_tracker_index"]
             sx, sy = start_pos["offsets"]
             ex, ey = end_pos["offsets"]
             if idx < len(self.points):
@@ -246,9 +285,8 @@ def create_new_tracker(state, box_size, frame, socketio):
         
         new_tracker = BoxTracker(state, box_size, pt, frame)
     elif tracker_type == "LINE":
-        new_tracker = LineTracker() # TODO
+        new_tracker = LineTracker(state, box_size, frame)
     elif tracker_type == "POLYGON":
-        print("Creating polygon tracker")
         new_tracker = PolygonTracker(state)
     
     if not new_tracker:
@@ -310,6 +348,7 @@ def update_box_tracker(state, frame, tracker_obj: BoxTracker, paused=None):
         markerSize=14,
         thickness=2,
     )
+    
     # Draw consensus box
     if state.get("show_bbox", True):
         cv2.rectangle(frame, mean_p1, mean_p2, tracker_obj.colour, 2)
@@ -371,6 +410,7 @@ def stream_video(
                 # We need to create a new tracker
                 create_new_tracker(state, box_size, frame, socketio)
                 state["create_new_tracker_type"] = None  # consume click
+
             if state.get("add_point_to_polygon_tracker") is not None:
                 idx, pt = state.get("add_point_to_polygon_tracker", (None, None))
                 if 0 <= idx < len(state.get("trackers", [])):
@@ -378,6 +418,15 @@ def stream_video(
                     if isinstance(tracker_obj, PolygonTracker):
                         tracker_obj.add_point(state, box_size, pt, frame)
                 state["add_point_to_polygon_tracker"] = None  # consume
+
+            if state.get("add_points_to_line") is not None:
+                idx, pts = state.get("add_points_to_line", (None, []))
+                print(f"Adding points to line tracker {idx}: {pts}")
+                if 0 <= idx < len(state.get("trackers", [])):
+                    tracker_obj: Tracker = state["trackers"][idx]
+                    if isinstance(tracker_obj, LineTracker):
+                        tracker_obj.add_points(state, box_size, pts, frame)
+                state["add_points_to_line"] = None  # consume
 
         # Update trackers (if initialized)
         with STATE_LOCK:
