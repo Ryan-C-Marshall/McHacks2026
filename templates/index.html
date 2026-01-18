@@ -145,7 +145,7 @@
                       <!-- Arrow tool -->
                       <button
                         type="button"
-                        class="btn btn-outline-secondary tool-btn active"
+                        class="btn btn-outline-secondary tool-btn"
                         id="toolArrow"
                         title="Arrow tool"
                         aria-label="Arrow tool"
@@ -239,7 +239,7 @@
                     ></div>
                     <button
                       type="button"
-                      class="btn btn-outline-secondary tool-btn bottom mt-auto"
+                      class="btn btn-outline-secondary tool-btn active bottom mt-auto"
                       id="toolTracker"
                       title="Add tracker"
                       aria-label="Add tracker"
@@ -320,6 +320,37 @@
       const trackerButtons = [];
       let activeTracker = -1;
 
+      const TRACKER_COLOURS_BGR = [
+        [0, 255, 0], // Green
+        [255, 0, 0], // Blue   (BGR -> RGB => 0,0,255)
+        [0, 0, 255], // Red    (BGR -> RGB => 255,0,0)
+        [255, 255, 0], // Cyan
+        [255, 0, 255], // Magenta
+        [0, 255, 255], // Yellow
+        [255, 165, 0], // Orange
+        [128, 0, 128], // Purple
+      ];
+
+      function trackerColorCss(idx) {
+        const bgr = TRACKER_COLOURS_BGR[idx % TRACKER_COLOURS_BGR.length];
+        const r = bgr[2],
+          g = bgr[1],
+          b = bgr[0]; // BGR -> RGB
+        return `rgb(${r}, ${g}, ${b})`;
+      }
+
+      function readableTextColorForRgbString(rgbStr) {
+        // rgb(r,g,b)
+        const m = rgbStr.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (!m) return "#fff";
+        const r = parseInt(m[1], 10),
+          g = parseInt(m[2], 10),
+          b = parseInt(m[3], 10);
+        // simple luminance heuristic
+        const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        return lum > 160 ? "#000" : "#fff";
+      }
+
       function setStatus(msg) {
         statusDiv.textContent = "Status: " + msg;
       }
@@ -377,11 +408,19 @@
       function addTrackerButton() {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "btn btn-success tracker-btn";
-        btn.title = `Tracker ${trackerCount}`;
-        btn.setAttribute("aria-label", `Tracker ${trackerCount}`);
 
-        // Simple "target" icon
+        const idx = trackerButtons.length; // UI index = tracker_num
+        const bg = trackerColorCss(idx);
+
+        // Don't use btn-success (it will override your background)
+        btn.className = "btn tracker-btn";
+        btn.title = `Tracker ${idx + 1}`;
+        btn.setAttribute("aria-label", `Tracker ${idx + 1}`);
+
+        btn.style.backgroundColor = bg;
+        btn.style.borderColor = bg;
+        btn.style.color = readableTextColorForRgbString(bg);
+
         btn.innerHTML = `
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/>
@@ -393,8 +432,9 @@
         trackerButtons.push(btn);
 
         btn.addEventListener("click", () => setActiveTracker(btn));
-
         setActiveTracker(btn);
+
+        trackerCount = trackerButtons.length; // keep consistent if you still use it elsewhere
       }
 
       canvas.addEventListener("click", (e) => {
