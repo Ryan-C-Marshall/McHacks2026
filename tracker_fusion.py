@@ -4,7 +4,7 @@ from kcf_to_csrt import contains
 
 FRAME_RESIZE = 8
 
-def draw_tracked_boxes(frame, trackers_data):
+def draw_tracked_boxes(frame, fundamental_trackers):
     """
     Draw tracking boxes and compute weighted consensus from multiple trackers.
     
@@ -22,30 +22,30 @@ def draw_tracked_boxes(frame, trackers_data):
     """
     
 
-    for t in trackers_data:
-        for j in trackers_data:
-            if t != j and t['ok'] and j['ok'] and not(contains(t['bbox'], j['bbox'])):
-                j['ok'] = False
+    for i, t1 in enumerate(fundamental_trackers):
+        for j, t2 in enumerate(fundamental_trackers[i+1:], start=i+1):
+            if i != j and t1.ok and t2.ok and not(contains(t1.bbox, t2.bbox)):
+                t2.ok = False  # Invalidate t2 if boxes do not contain each other
     
     # Filter successful trackers
-    successful = [t for t in trackers_data if t['ok']]
+    successful = [t for t in fundamental_trackers if t.ok]
     if not successful:
         # No tracking success at all
         cv2.putText(frame, "Tracking failure detected", (50, 80), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
-        return frame
+        return None
     
     # Calculate weights based on which trackers are active
     weights = []
-    names = [t['name'] for t in successful]
+    names = [t.tracker_type for t in successful]
     
     if 'KCF' in names:
         # KCF gets 80%, distribute remaining 20%
         remaining = 0.20
         for t in successful:
-            if t['name'] == 'KCF':
+            if t.tracker_type == 'KCF':
                 weights.append(0.80)
-            elif t['name'] == 'CSRT':
+            elif t.tracker_type == 'CSRT':
                 # CSRT gets 75% of the remaining
                 weights.append(0.75 * remaining)
             else:
@@ -60,7 +60,7 @@ def draw_tracked_boxes(frame, trackers_data):
         if 'CSRT' in names:
             # CSRT gets 75%, others split 25%
             for t in successful:
-                if t['name'] == 'CSRT':
+                if t.tracker_type == 'CSRT':
                     weights.append(0.75)
                 else:
                     other_count = sum(1 for n in names if n != 'CSRT')
@@ -78,9 +78,8 @@ def draw_tracked_boxes(frame, trackers_data):
     all_p1 = []
     all_p2 = []
     
-    for t, weight in zip(successful, weights):
-        bbox = t['bbox']
-        name = t['name']
+    for t in successful:
+        bbox = t.bbox
         
         p1 = (int(bbox[0]), int(bbox[1]))
         p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
