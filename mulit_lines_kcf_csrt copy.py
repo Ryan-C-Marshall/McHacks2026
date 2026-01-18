@@ -19,7 +19,7 @@ resize = 0.8
 NICE_x = 748 *resize
 NICE_y = 1134 *resize
 
-PATH = "videos/Echo/echo3.mp4"
+PATH = "videos/Echo/echo4.mp4"
 
 BOXES = False
 
