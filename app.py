@@ -43,16 +43,16 @@ def _bbox_offsets_from_abs_click(tracker_obj: dict, x: int, y: int):
     return (int(x - bx), int(y - by))
 
 @app.route("/")
-def index():
-    state["video_path"] = request.args.get("video", DEFAULT_VIDEO_PATH)
-
-    return render_template("index.html")
-
-
-@app.route("/landing")
 def landing():
     videos = load_videos_from_directory()
     return render_template("landing_page.html", videos=videos)
+
+
+@app.route("/index")
+def index():
+    state["video_path"] = request.args.get("video", DEFAULT_VIDEO_PATH)
+    start_tracking()
+    return render_template("index.html")
 
 
 @app.route("/thumbnail/<path:video_path>")
@@ -82,12 +82,11 @@ def on_toggle_bbox(data):
 def start_tracking():
     global stream_thread
 
-    state["paused"] = False
-
-    if state["tracking_active"]:
+    if state["tracking_active"] and not state["paused"]:
         return
 
     state["tracking_active"] = True
+    state["paused"] = False
 
     stream_thread = threading.Thread(
         target=stream_video,
@@ -120,10 +119,15 @@ def handle_delete(data):
 
     socketio.emit("trackers_list", {"trackers": trackers})
 
-@socketio.on("delete_all_trackers")
-def handle_delete_all():
+@socketio.on("handle_reload")
+def handle_reload():
     with STATE_LOCK:
         state["trackers"] = []
+        state["clicked_pt"] = None
+        state["tracking_active"] = False
+        state["paused"] = False
+        state["resume_frame"] = 0
+        state["show_bbox"] = True
         trackers = []
 
     socketio.emit("trackers_list", {"trackers": trackers})

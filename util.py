@@ -225,6 +225,9 @@ def stream_video(
 
     while True:
 
+        if(not state.get("tracking_active")):
+            break
+
         if not state.get("paused", True):
             # If not paused, update video
             ret, frame = cap.read()
