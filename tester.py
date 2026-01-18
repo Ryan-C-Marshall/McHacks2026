@@ -12,6 +12,7 @@ if __name__ == '__main__':
     
 
     all_bboxes = multi_line_select(frame)
+    print(all_bboxes)
 
     trackers, flags = start_line_tracking(all_bboxes, frame)
 
