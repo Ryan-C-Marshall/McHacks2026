@@ -77,8 +77,6 @@ def start_tracking():
     state["tracking_active"] = True
     state["paused"] = False
 
-    # If you want to use the landing page selection later, pass that path instead.
-
     stream_thread = threading.Thread(
         target=stream_video,
         kwargs={

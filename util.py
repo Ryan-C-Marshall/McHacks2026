@@ -99,6 +99,46 @@ def create_new_tracker(state, tracker_type, box_size, frame, socketio):
     
     print("Current trackers:", state["trackers"])
 
+def update_tracker(state, frame, tracker_type, tracker_num):
+    timer = cv2.getTickCount()
+    ok, bbox = state["trackers"][tracker_num]["tracker"].update(frame)
+    fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
+
+    if ok:
+        x, y, bw, bh = bbox
+        cx = int(x + bw / 2)
+        cy = int(y + bh / 2)
+
+        # Crosshair
+        cv2.drawMarker(
+            frame, (cx, cy), (0, 255, 0),
+            markerType=cv2.MARKER_CROSS, markerSize=14, thickness=2
+        )
+
+        # Optional bbox
+        if state.get("show_bbox", True):
+            cv2.rectangle(
+                frame,
+                (int(x), int(y)),
+                (int(x + bw), int(y + bh)),
+                (0, 255, 0),
+                2
+            )
+    else:
+        cv2.putText(
+            frame, "Tracking failure", (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2
+        )
+
+    cv2.putText(
+        frame, f"{tracker_type} Tracker", (10, 60),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
+    )
+    cv2.putText(
+        frame, f"FPS : {int(fps)}", (10, 90),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
+    )
+
 
 def stream_video(
     socketio,
@@ -139,51 +179,17 @@ def stream_video(
         frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
 
         # Initialize tracker once we have a click
+        if state.get("clicked_pt") is not None:
+            create_new_tracker(state, tracker_type, box_size, frame, socketio)
+            state["clicked_pt"] = None  # consume click
+
         num_trackers = len(state.get("trackers", []))
 
-        if (state.get("clicked_pt") is not None) and (num_trackers == 0 or not state["trackers"][0].get("tracker_inited", False)):
-            create_new_tracker(state, tracker_type, box_size, frame, socketio)
-
-        # Update tracker if initialized
-        if num_trackers > 0 and state["trackers"][0]["tracker_inited"] and state["trackers"][0]["tracker"] is not None:
-            timer = cv2.getTickCount()
-            ok, bbox = state["trackers"][0]["tracker"].update(frame)
-            fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
-
-            if ok:
-                x, y, bw, bh = bbox
-                cx = int(x + bw / 2)
-                cy = int(y + bh / 2)
-
-                # Crosshair
-                cv2.drawMarker(
-                    frame, (cx, cy), (0, 255, 0),
-                    markerType=cv2.MARKER_CROSS, markerSize=14, thickness=2
-                )
-
-                # Optional bbox
-                if state.get("show_bbox", True):
-                    cv2.rectangle(
-                        frame,
-                        (int(x), int(y)),
-                        (int(x + bw), int(y + bh)),
-                        (0, 255, 0),
-                        2
-                    )
-            else:
-                cv2.putText(
-                    frame, "Tracking failure", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2
-                )
-
-            cv2.putText(
-                frame, f"{tracker_type} Tracker", (10, 60),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
-            )
-            cv2.putText(
-                frame, f"FPS : {int(fps)}", (10, 90),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
-            )
+        # Update trackers (if initialized)
+        if num_trackers > 0:
+            for i in range(num_trackers):
+                if state["trackers"][i]["tracker_inited"] and state["trackers"][i]["tracker"] is not None:
+                    update_tracker(state, frame, tracker_type, tracker_num=i)
 
         # Encode and emit frame
         ok_jpg, buffer = cv2.imencode(".jpg", frame)
