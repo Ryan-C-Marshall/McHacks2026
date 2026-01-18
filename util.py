@@ -152,6 +152,7 @@ def update_tracker(state, frame, tracker_type, tracker_num, paused=False):
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
 
     if ok:
+        print("Last bbox:", tracker_obj["last_bbox"])
         x, y, bw, bh = tracker_obj["last_bbox"]
         cx = int(x + bw / 2)
         cy = int(y + bh / 2)
