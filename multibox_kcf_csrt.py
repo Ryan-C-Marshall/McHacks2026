@@ -8,13 +8,17 @@ tracker_type2 = "CSRT"
 tracker_type3 = "MEDIANFLOW"
 tracker_types = [tracker_type1, tracker_type2, tracker_type3]
 
-FRAME_RESIZE = 8
+FRAME_RESIZE = 3
+ALLOWANCE = 0
 
-PATH = "videos/Echo/echo1.mp4"
+PATH = "videos/Intrapartum/Intrapartum-probe_movement.mp4"
 
 bbox1 = (0,0,0,0)
 bbox2 = (0,0,0,0)
 bbox3 = (0,0,0,0)
+
+BOX_WIDTH = BOX_HEIGHT = 100
+BOX_SPACING = 50
 
 def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=True, ok3=True, frame=None, fps=0, drawn_center=(0, 0)):
         # Keep track of drawn box centers for line drawing
@@ -373,8 +377,9 @@ if __name__ == '__main__':
     # Read video
 
     frame, video = gen_frame(PATH)
+
     
-    bboxes = line_select(frame, box_width=50, box_height=50, spacing=100)
+    bboxes = line_select(frame, box_width=BOX_WIDTH, box_height=BOX_HEIGHT, spacing=BOX_SPACING)
     
     num_boxes = len(bboxes)
     
@@ -383,6 +388,7 @@ if __name__ == '__main__':
 
     while True:
         ok, frame = next_frame(frame, video)
+
         
         if not ok: break
         
@@ -404,12 +410,15 @@ if __name__ == '__main__':
                 bbox3 = dummy3
 
 
-            drawn_centres.append(display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, fps))
+            drawn_centre = display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, fps)
+            if drawn_centre != (0, 0):
+                drawn_centres.append(display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, fps))
 
-        print(drawn_centres)
         if len(drawn_centres) > 1:
             for i in range(len(drawn_centres) - 1):
                 cv2.line(frame, drawn_centres[i], drawn_centres[i+1], (200, 200, 0), 2)
+        
+
 
         cv2.imshow("Tracking", frame)
 

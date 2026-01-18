@@ -388,8 +388,8 @@ if __name__ == '__main__':
         sys.exit()
     
     # Configuration
-    NUM_POINTS = 3
-    BOX_SIZE = 350
+    NUM_POINTS = 10
+    BOX_SIZE = 200
     
     # Interpolate points along the line
     box_centers = interpolate_line_points(state['user_points'], NUM_POINTS)
