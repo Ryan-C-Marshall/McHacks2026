@@ -3,7 +3,7 @@ import base64
 import threading
 
 from tracker_fusion import draw_tracked_boxes
-from lines_kcf_csrt import draw_lines
+from lines_kcf_csrt import draw_lines, fast_track
 
 STATE_LOCK = threading.RLock()
 
@@ -15,7 +15,7 @@ DEFAULT_VIDEO_PATH = "videos/Echo/echo1.mp4"
 class FundamentalTracker():
     def __init__(self, tracker_type: str, frame, bbox0):
         self.tracker_type = tracker_type
-        self.tracker = pick_tracker(tracker_type)
+        self.tracker = pick_tracker(tracker_type) # tracker_obj
         self.ok = False
         self.bbox = bbox0
         self.tracker.init(frame, bbox0)
@@ -63,8 +63,8 @@ class BoxTracker(Tracker):
         super().__init__(state, tracker_num=tracker_num)
         self.update(state, frame, paused=False)
 
-    def update(self, state, frame, paused=None):
-        update_box_tracker(state, frame, self, paused)
+    def update(self, state, frame, paused=None, quick_track=False):
+        update_box_tracker(state, frame, self, paused, quick_track=quick_track)
 
         # Now draw your existing overlay items using the consensus bbox as the origin
         x, y, _, _ = self.last_bbox
@@ -85,7 +85,7 @@ class BoxTracker(Tracker):
             cv2.arrowedLine(frame, (int(x) + sx, int(y) + sy),
                             (int(x) + ex, int(y) + ey),
                             overlay_colour, 2, tipLength=0.2)
-
+    
 
 class LineTracker(Tracker):
     def __init__(self, state, box_size, frame):
@@ -100,7 +100,7 @@ class LineTracker(Tracker):
 
     def update(self, state, frame, paused=None):
         for pt_tracker in self.points:
-            pt_tracker.update(state, frame)
+            pt_tracker.update(state, frame, quick_track=True)
         
         # Draw lines between adjacent trackers
         if len(self.points) > 1:
@@ -308,7 +308,7 @@ def delete_all_trackers(state):
     with STATE_LOCK:
         state["trackers"] = []
 
-def update_box_tracker(state, frame, tracker_obj: BoxTracker, paused=None):
+def update_box_tracker(state, frame, tracker_obj: BoxTracker, paused=None, quick_track=False):
     if paused is None:
         paused = state.get("paused", False)
 
@@ -325,7 +325,13 @@ def update_box_tracker(state, frame, tracker_obj: BoxTracker, paused=None):
             t.ok = bool(ok)
             t.bbox = bb
 
-    outputs = draw_tracked_boxes(frame, subtrackers)
+    outputs = None
+    if quick_track:
+        nested_tracker_list = [[t.tracker] for t in subtrackers]
+        points_to_draw, _ = fast_track(nested_tracker_list, frame)
+        outputs = points_to_draw[0]
+    else:
+        outputs = draw_tracked_boxes(frame, subtrackers)
     if outputs is None:
         return
     mean_p1, mean_p2 = outputs
@@ -348,7 +354,7 @@ def update_box_tracker(state, frame, tracker_obj: BoxTracker, paused=None):
         markerSize=14,
         thickness=2,
     )
-    
+
     # Draw consensus box
     if state.get("show_bbox", True):
         cv2.rectangle(frame, mean_p1, mean_p2, tracker_obj.colour, 2)

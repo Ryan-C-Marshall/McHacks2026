@@ -28,7 +28,7 @@ bbox1 = bbox2 = bbox3 = (0,0,0,0)
 BOX_WIDTH = BOX_HEIGHT = 100
 BOX_SPACING = 40
 
-def define_boxes(bbox1, bbox2, bbox3, ok1=True, ok2=True, ok3=True, frame=None, drawn_center=(0, 0), pts = ((0, 0),(0, )), boxes = True):
+def define_boxes(bbox1, bbox2, bbox3, ok1=True, ok2=True, ok3=True, frame=None, drawn_center=(0, 0), pts = ((0, 0),(0, )), boxes=False):
         # Keep track of drawn box centers for line drawing
 
         
@@ -445,10 +445,7 @@ def update_lines(trackers, frame, boxes, i, flags, bbox1, bbox2, bbox3):
 def fast_track(trackers, frame, line=[[]], count=0, flags=[True], bbox1=(0, 0, 0, 0), bbox2=(0, 0, 0, 0), bbox3=(0, 0, 0, 0)):
     drawn_centres = []
     boxes = BOXES
-    if len(line) == 1:
-        boxes = True
     
-
     for i in range(count, count + len(line)): # Updating trackers for all the boxes in the current line
         bbox1, bbox2, bbox3, points_to_draw = update_lines(trackers, frame, boxes, i, flags, bbox1, bbox2, bbox3)
         drawn_centres.append(points_to_draw)
