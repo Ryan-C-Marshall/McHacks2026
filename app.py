@@ -17,6 +17,8 @@ tracker_type = tracker_types[tracker_num]
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# type 'tracker': a dict with 'tracker', 'tracker_inited', 'text', 'text_position', 'arrow', 'arrow_position'
+
 # One shared state object for util.stream_video
 state = {
     "tracking_active": False,

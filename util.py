@@ -83,6 +83,9 @@ def create_new_tracker(state, tracker_type, box_size, frame, socketio):
 
     try:
         new_tracker = {"tracker": pick_tracker(tracker_type), "tracker_inited": False}
+        new_tracker["texts"] = [(f"{tracker_type} Tracker ({len(state['trackers']) + 1})", (10, -20))]
+        new_tracker["arrows"] = [((0, 0), (box_size, box_size))]
+
         new_tracker["tracker"].init(frame, bbox0)
         
         ok_init, _ = new_tracker["tracker"].update(frame)
@@ -107,8 +110,9 @@ def delete_all_trackers(state):
     state["trackers"] = []
 
 def update_tracker(state, frame, tracker_type, tracker_num):
+    tracker_obj = state["trackers"][tracker_num]
     timer = cv2.getTickCount()
-    ok, bbox = state["trackers"][tracker_num]["tracker"].update(frame)
+    ok, bbox = tracker_obj["tracker"].update(frame)
     fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
 
     if ok:
@@ -130,6 +134,24 @@ def update_tracker(state, frame, tracker_type, tracker_num):
                 (int(x + bw), int(y + bh)),
                 (0, 255, 0),
                 2
+            )
+        
+        # Texts
+        for text in tracker_obj.get("texts", []):
+            cv2.putText(
+                frame, text[0], (int(x) + text[1][0], int(y) + text[1][1] + 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50, 170, 50), 2
+            )
+
+        # Arrows
+        for arrow in tracker_obj.get("arrows", []):
+            cv2.arrowedLine(
+                frame,
+                (int(x) + arrow[0][0], int(y) + arrow[0][1]),
+                (int(x) + arrow[1][0], int(y) + arrow[1][1]),
+                (255, 0, 0),
+                2,
+                tipLength=0.3
             )
     else:
         cv2.putText(
