@@ -458,12 +458,12 @@ def fast_track(trackers, frame, line=[[]], count=0, flags=[True], bbox1=(0, 0, 0
     # return drawn_centres, count
     return points_to_draw, count
 
-def draw_lines(frame, drawn_centres):
+def draw_lines(frame, drawn_centres, colour):
 
 
     if len(drawn_centres) > 1:
         for i in range(len(drawn_centres) - 1):
-            cv2.line(frame, drawn_centres[i], drawn_centres[i+1], (200, 200, 0), 2)
+            cv2.line(frame, drawn_centres[i], drawn_centres[i+1], colour, 2)
 
 def start_line_tracking(bboxes, frame):
     flat = list(itertools.chain.from_iterable(bboxes))
