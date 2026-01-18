@@ -27,7 +27,7 @@ state = {
     "trackers": [],     # tracker, tracker_inited
     "show_bbox": True,
     "resume_frame": 0,
-    "video_path": DEFAULT_VIDEO_PATH,
+    "video_path": None,
 }
 
 stream_thread = None
