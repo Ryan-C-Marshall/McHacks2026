@@ -1,20 +1,77 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Tracker</title>
 
-{% block title %}Image Tracker{% endblock %}
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-{% block extra_head %}
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<style>
-  /* Ensures the canvas always fills the available width */
-  #videoCanvas {
-    width: 100%;
-    height: 100%;
-    display: block;
-  }
-</style>
-{% endblock %}
+    <style>
+      #videoCanvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
 
-{% block content %}
+      /* Left tool buttons */
+      .tool-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 6px;
+      }
+      .tool-btn {
+        width: 52px;
+        height: 52px;
+        padding: 0;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .tool-btn svg {
+        width: 26px;
+        height: 26px;
+      }
+
+      .tool-btn.bottom {
+        width: 52px;
+        height: 52px;
+        padding: 0;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Left column width (rail + bottom button) */
+      .left-tools {
+        width: 72px; /* rail width + padding */
+      }
+    </style>
+  </head>
+
+  <body class="bg-light">
+    {% extends "base.html" %} {% block title %}Image Tracker{% endblock %} {%
+    block extra_head %}
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+      /* Ensures the canvas always fills the available width */
+      #videoCanvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+    </style>
+    {% endblock %} {% block content %}
     <div class="container mt-5">
       <div class="row justify-content-center">
         <div class="col-lg-10">
@@ -25,25 +82,155 @@
 
             <div class="card-body">
               <div class="text-center mb-3">
-                <!-- Ratio wrapper makes it responsive while preserving aspect ratio -->
-                <div class="ratio ratio-4x3 border rounded overflow-hidden">
-                  <canvas id="videoCanvas"></canvas>
-                </div>
-              </div>
+                <!-- Left tools + responsive canvas area -->
+                <div class="d-flex align-items-stretch gap-2">
+                  <!-- LEFT COLUMN: rail on top, tracker button below -->
+                  <div class="d-flex flex-column align-items-center left-tools">
+                    <!-- TOOL RAIL -->
+                    <div class="tool-rail rounded bg-white">
+                      <!-- PLAY / PAUSE CONTROLS -->
+                      <div class="d-flex flex-column gap-2 my-2">
+                        <!-- PLAY -->
+                        <button
+                          type="button"
+                          class="btn btn-outline-success tool-btn"
+                          id="startBtn"
+                          title="Play"
+                          aria-label="Play"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <path d="M8 5l10 7-10 7V5z" fill="currentColor" />
+                          </svg>
+                        </button>
 
-              <div class="d-flex justify-content-center mb-3">
-                <div class="btn-group" role="group">
-                  <button type="button" class="btn btn-success" id="startBtn">
-                    Start
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-danger"
-                    id="pauseBtn"
-                    disabled
+                        <!-- PAUSE -->
+                        <button
+                          type="button"
+                          class="btn btn-outline-danger tool-btn"
+                          id="pauseBtn"
+                          title="Pause"
+                          aria-label="Pause"
+                          disabled
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <path d="M7 5h4v14H7z" fill="currentColor" />
+                            <path d="M13 5h4v14h-4z" fill="currentColor" />
+                          </svg>
+                        </button>
+                      </div>
+                      <!-- Arrow tool -->
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary tool-btn active"
+                        id="toolArrow"
+                        title="Arrow tool"
+                        aria-label="Arrow tool"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path
+                            d="M5 12h12"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                          <path
+                            d="M13 6l6 6-6 6"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </button>
+
+                      <!-- Text tool -->
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary tool-btn"
+                        id="toolText"
+                        title="Text tool"
+                        aria-label="Text tool"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path
+                            d="M6 7V5h12v2"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                          <path
+                            d="M12 5v14"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                          <path
+                            d="M8 19h8"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                        </svg>
+                      </button>
+
+                      <!-- Select tool -->
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary tool-btn"
+                        id="toolSelect"
+                        title="Select tool"
+                        aria-label="Select tool"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path
+                            d="M6 4l7 16 2.2-6.2L21 12 6 4z"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <!-- BUTTON BELOW TOOL RAIL -->
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary tool-btn bottom mt-auto"
+                      id="toolTracker"
+                      title="Add tracker"
+                      aria-label="Add tracker"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path
+                          d="M12 5v14"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M5 12h14"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <!-- CANVAS AREA (RIGHT) -->
+                  <div
+                    class="ratio ratio-4x3 border rounded overflow-hidden flex-grow-1"
                   >
-                    Pause
-                  </button>
+                    <canvas id="videoCanvas"></canvas>
+                  </div>
                 </div>
               </div>
 
@@ -78,8 +265,6 @@
     </footer>
 
     <script>
-      // Must match your OpenCV output/tracking resolution in Python
-      // (i.e., frame = cv2.resize(frame, (TARGET_W, TARGET_H)))
       const TARGET_W = 640;
       const TARGET_H = 480;
 
@@ -98,11 +283,9 @@
         const rect = canvas.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
 
-        // Backing store size in device pixels
         canvas.width = Math.round(rect.width * dpr);
         canvas.height = Math.round(rect.height * dpr);
 
-        // Draw in CSS pixel coordinates (more intuitive)
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
 
@@ -112,7 +295,6 @@
       socket.on("frame", (data) => {
         const img = new Image();
         img.onload = () => {
-          // Draw to full visible canvas area (CSS px space due to setTransform above)
           const rect = canvas.getBoundingClientRect();
           ctx.clearRect(0, 0, rect.width, rect.height);
           ctx.drawImage(img, 0, 0, rect.width, rect.height);
@@ -138,15 +320,11 @@
         setStatus("Pausing...");
       });
 
-      // Map click to OpenCV tracking coordinates (TARGET_W x TARGET_H)
       canvas.addEventListener("click", (e) => {
         const rect = canvas.getBoundingClientRect();
-
-        // Click position in CSS pixels
         const cssX = e.clientX - rect.left;
         const cssY = e.clientY - rect.top;
 
-        // Convert CSS pixel click to tracking pixel coords
         const trackX = Math.round((cssX / rect.width) * TARGET_W);
         const trackY = Math.round((cssY / rect.height) * TARGET_H);
 
@@ -154,9 +332,26 @@
       });
 
       const bboxToggle = document.getElementById("bboxToggle");
-
       bboxToggle.addEventListener("change", () => {
         socket.emit("toggle_bbox", { show: bboxToggle.checked });
       });
+
+      const toolButtons = [
+        document.getElementById("toolArrow"),
+        document.getElementById("toolText"),
+        document.getElementById("toolSelect"),
+        document.getElementById("toolTracker"),
+      ];
+
+      function setActiveTool(btn) {
+        toolButtons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+      }
+
+      toolButtons.forEach((btn) => {
+        btn.addEventListener("click", () => setActiveTool(btn));
+      });
     </script>
-{% endblock %}
+    {% endblock %}
+  </body>
+</html>
