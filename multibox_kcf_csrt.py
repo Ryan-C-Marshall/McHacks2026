@@ -410,7 +410,7 @@ def draw_lines(trackers, frame, drawn_centres, boxes, i, flags, bbox1, bbox2, bb
     
     return bbox1, bbox2, bbox3
 
-def line_handling(trackers, frame, count, flags):
+def active_line_tracking(trackers, frame, count, flags):
     drawn_centres = []
     boxes = BOXES
     if len(line) == 1:
@@ -429,6 +429,15 @@ def line_handling(trackers, frame, count, flags):
             cv2.line(frame, drawn_centres[i], drawn_centres[i+1], (200, 200, 0), 2)
     return drawn_centres, count
 
+def start_line_tracking(bboxes, frame):
+    flat = list(itertools.chain.from_iterable(all_bboxes))
+
+
+    trackers = initialize_trackers(flat, frame)
+
+    print(trackers)
+    flags = [True] * len(flat)
+    return trackers, flags
 
 if __name__ == '__main__':
     # Initialize video
@@ -439,24 +448,21 @@ if __name__ == '__main__':
 
     all_bboxes = [[(323, 487, 100, 100), (330, 448, 100, 100), (336, 411, 100, 100), (336, 371, 100, 100), (336, 331, 100, 100), (361, 316, 100, 100), (400, 314, 100, 100), (438, 321, 100, 100), (475, 330, 100, 100), (513, 335, 100, 100)], [(416, 4, 100, 100), (417, 43, 100, 100), (419, 82, 100, 100), (417, 122, 100, 100), (406, 154, 100, 100)], [(214, 36, 100, 100), (193, 65, 100, 100), (191, 104, 100, 100), (181, 140, 100, 100), (185, 172, 100, 100), (209, 198, 100, 100), (232, 225, 100, 100), (254, 252, 100, 100), (279, 278, 100, 100)]]
     all_bboxes = multi_line_select(frame, box_width=BOX_WIDTH, box_height=BOX_HEIGHT, spacing=BOX_SPACING)
+    
+    trackers, flags = start_line_tracking(all_bboxes, frame)
 
-    print(all_bboxes)
-    flat = list(itertools.chain.from_iterable(all_bboxes))
-
-
-    trackers = initialize_trackers(flat, frame)
-    flags = [True] * len(flat)
 
     while True:
         ok, frame = next_frame(frame, video)
 
         if not ok: break
+
         
         timer = cv2.getTickCount()
 
         count = 0
         for line in all_bboxes:
-            drawn_centres, count = line_handling(trackers, frame, count, flags=flags)
+            drawn_centres, count = active_line_tracking(trackers, frame, count, flags=flags)
 
 
         
@@ -466,10 +472,22 @@ if __name__ == '__main__':
         cv2.imshow("Tracking", frame)
 
 
+
         k = cv2.waitKey(22) & 0xff
         if k == 27:  # ESC
             break
 
     video.release()
     cv2.destroyAllWindows()
-        
+    print(trackers)
+
+
+"""
+The code flow:
+
+Take a set of boxes and a frame -> start_line_tracking -> returns the trackers
+
+For each line, pass those trackers and frame to active_line_tracking -> nested is draw_lines which does the tracker updates
+
+draw_lines updates the drawn_centres list and returns the updated bboxes for next iteration
+"""
