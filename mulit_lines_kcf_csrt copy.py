@@ -26,7 +26,7 @@ BOXES = False
 bbox1 = bbox2 = bbox3 = (0,0,0,0)
 
 BOX_WIDTH = BOX_HEIGHT = 100
-BOX_SPACING = 40
+BOX_SPACING = 30
 
 def define_boxes(bbox1, bbox2, bbox3, ok1=True, ok2=True, ok3=True, frame=None, drawn_center=(0, 0), pts = ((0, 0),(0, )), boxes = True):
         # Keep track of drawn box centers for line drawing
