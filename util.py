@@ -86,7 +86,7 @@ def stream_video(
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         socketio.emit("status", f"Error: Cannot open video: {video_path}")
-        state["tracking_active"] = False
+        state["paused"] = False
         return
 
     target_w, target_h = target_size
@@ -99,11 +99,11 @@ def stream_video(
     else:
         socketio.emit("status", "Streaming started")
 
-    while state["tracking_active"]:
+    while not state["paused"]:
         ret, frame = cap.read()
 
         if not ret or frame is None:
-            state["tracking_active"] = False
+            state["paused"] = True
             break
 
         # Record resume position after successful read
