@@ -443,7 +443,7 @@ def update_lines(trackers, frame, boxes, i, flags, bbox1, bbox2, bbox3):
 
     return bbox1, bbox2, bbox3, points_to_draw
 
-def active_line_tracking(trackers, frame, line=[[]], count=0, flags=[True], bbox1=(0, 0, 0, 0), bbox2=(0, 0, 0, 0), bbox3=(0, 0, 0, 0)):
+def fast_track(trackers, frame, line=[[]], count=0, flags=[True], bbox1=(0, 0, 0, 0), bbox2=(0, 0, 0, 0), bbox3=(0, 0, 0, 0)):
     drawn_centres = []
     boxes = BOXES
     if len(line) == 1:
@@ -452,7 +452,7 @@ def active_line_tracking(trackers, frame, line=[[]], count=0, flags=[True], bbox
 
     for i in range(count, count + len(line)): # Updating trackers for all the boxes in the current line
         bbox1, bbox2, bbox3, points_to_draw = update_lines(trackers, frame, boxes, i, flags, bbox1, bbox2, bbox3)
-        drawn_centres.extend(points_to_draw)
+        drawn_centres.append(points_to_draw)
 
     count += len(line)
 
@@ -501,18 +501,16 @@ if __name__ == '__main__':
         timer = cv2.getTickCount()
 
 
-        # count = 0
-        # for line in all_bboxes:
-        #     drawn_centres, count = active_line_tracking(trackers, frame, line, count, flags=flags)
-        #     draw_lines(frame, drawn_centres)
-        # count = 0
-        # for line in all_bboxes:
-        #     drawn_centres, count = active_line_tracking(trackers, frame, line, count, flags=flags)
-        #     draw_lines(frame, drawn_centres)
+        count = 0
+        for line in all_bboxes:
+            drawn_centres, count = fast_track(trackers, frame, line, count, flags=flags)
+            print(drawn_centres)
+            draw_lines(frame, drawn_centres)
+
         
-        drawn_centres, count = active_line_tracking(trackers, frame)
-        print(drawn_centres)
-        draw_lines(frame, drawn_centres)
+        # drawn_centres, count = fast_track(trackers, frame)
+        # print(drawn_centres)
+        # draw_lines(frame, drawn_centres)
 
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
         cv2.putText(frame, f"FPS: {int(fps)}", (10, 30), 
