@@ -76,6 +76,19 @@ def make_square_bbox(center, box_size, w, h):
     y = max(0, min(y, h - box_size))
     return (x, y, int(box_size), int(box_size))
 
+def generate_tracker_colour(tracker_num):
+    colours = [
+        (0, 255, 0),    # Green
+        (255, 0, 0),    # Blue
+        (0, 0, 255),    # Red
+        (255, 255, 0),  # Cyan
+        (255, 0, 255),  # Magenta
+        (0, 255, 255),  # Yellow
+        (255, 165, 0),  # Orange
+        (128, 0, 128),  # Purple
+    ]
+    return colours[tracker_num % len(colours)]
+
 def add_text_to_tracker(tracker_obj, text, position):
     print(position)
     tracker_obj["texts"].append((text, position))
@@ -96,10 +109,9 @@ def create_new_tracker(state, tracker_type, box_size, frame, socketio):
     bbox0 = make_square_bbox(pt, box_size, w, h)
 
     new_tracker = {"tracker": pick_tracker(tracker_type), "tracker_inited": False}
+    new_tracker["colour"] = generate_tracker_colour(len(state["trackers"]))
     new_tracker["texts"] = []
     new_tracker["arrows"] = []
-    # new_tracker["texts"] = [(f"{tracker_type} Tracker ({len(state['trackers']) + 1})", (10, -20))]
-    # new_tracker["arrows"] = [((0, 0), (box_size, box_size))]
 
     new_tracker["tracker"].init(frame, bbox0)
     
@@ -146,7 +158,7 @@ def update_tracker(state, frame, tracker_type, tracker_num, paused=False):
 
         # Crosshair
         cv2.drawMarker(
-            frame, (cx, cy), (0, 255, 0),
+            frame, (cx, cy), tracker_obj["colour"],
             markerType=cv2.MARKER_CROSS, markerSize=14, thickness=2
         )
 
@@ -156,7 +168,7 @@ def update_tracker(state, frame, tracker_type, tracker_num, paused=False):
                 frame,
                 (int(x), int(y)),
                 (int(x + bw), int(y + bh)),
-                (0, 255, 0),
+                tracker_obj["colour"],
                 2
             )
         
@@ -164,7 +176,7 @@ def update_tracker(state, frame, tracker_type, tracker_num, paused=False):
         for text in tracker_obj.get("texts", []):
             cv2.putText(
                 frame, text[0], (int(x) + text[1][0], int(y) + text[1][1] + 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50, 170, 50), 2
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, tracker_obj["colour"], 2
             )
 
         # Arrows
@@ -173,7 +185,7 @@ def update_tracker(state, frame, tracker_type, tracker_num, paused=False):
                 frame,
                 (int(x) + arrow[0][0], int(y) + arrow[0][1]),
                 (int(x) + arrow[1][0], int(y) + arrow[1][1]),
-                (255, 0, 0),
+                tracker_obj["colour"],
                 2,
                 tipLength=0.3
             )
@@ -265,7 +277,6 @@ def stream_video(
 
         socketio.sleep(1 / fps_limit)
     
-    print("Releasing video capture...")
     cap.release()
     socketio.emit("status", "Streaming stopped")
     with STATE_LOCK:
