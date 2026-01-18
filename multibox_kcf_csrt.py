@@ -10,17 +10,17 @@ tracker_type2 = "CSRT"
 tracker_type3 = "MEDIANFLOW"
 tracker_types = [tracker_type1, tracker_type2, tracker_type3]
 
-FRAME_RESIZE = 0.5
+FRAME_RESIZE = 8
 ALLOWANCE = 0
 
-PATH = "videos/Microscopy1.mp4"
+PATH = "videos/Echo/echo1.mp4"
 
 bbox1 = (0,0,0,0)
 bbox2 = (0,0,0,0)
 bbox3 = (0,0,0,0)
 
 BOX_WIDTH = BOX_HEIGHT = 100
-BOX_SPACING = 50
+BOX_SPACING = 10
 
 def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=True, ok3=True, frame=None, drawn_center=(0, 0), boxes = True):
         # Keep track of drawn box centers for line drawing
@@ -31,8 +31,8 @@ def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=Tru
             p1_1 = (int(bbox1[0]), int(bbox1[1]))
             p1_2 = (int(bbox1[0] + bbox1[2]), int(bbox1[1] + bbox1[3]))
             if boxes:
-                cv2.rectangle(frame, p1_1, p1_2, (255, 0, 0), 2, 1)
-                cv2.putText(frame, f"{tracker_types[0]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+                cv2.rectangle(frame, p1_1, p1_2, (100, 0, 0), 2, 1)
+                cv2.putText(frame, f"{tracker_types[0]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 0, 0), 2)
 
             
             # Calculate center of bbox1
@@ -45,8 +45,8 @@ def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=Tru
             p2_1 = (int(bbox2[0]), int(bbox2[1]))
             p2_2 = (int(bbox2[0] + bbox2[2]), int(bbox2[1] + bbox2[3]))
             if boxes:
-                cv2.rectangle(frame, p2_1, p2_2, (0, 255, 0), 2, 1)
-                cv2.putText(frame, f"{tracker_types[1]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                cv2.rectangle(frame, p2_1, p2_2, (0, 100, 0), 2, 1)
+                cv2.putText(frame, f"{tracker_types[1]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 100, 0), 2)
 
             # Calculate center of bbox2
             center2 = (int(bbox2[0] + bbox2[2]/2), int(bbox2[1] + bbox2[3]/2))
@@ -61,8 +61,8 @@ def display(bbox1=(0,0,0,0), bbox2=(0,0,0,0), bbox3=(0,0,0,0), ok1=True, ok2=Tru
             p3_1 = (int(bbox3[0]), int(bbox3[1]))
             p3_2 = (int(bbox3[0] + bbox3[2]), int(bbox3[1] + bbox3[3]))
             if boxes:
-                cv2.rectangle(frame, p3_1, p3_2, (0, 0, 255), 2, 1)
-                cv2.putText(frame, f"{tracker_types[2]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.rectangle(frame, p3_1, p3_2, (0, 0, 100), 2, 1)
+                cv2.putText(frame, f"{tracker_types[2]}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 100), 2)
 
             
             # Calculate center of bbox3
@@ -128,7 +128,7 @@ def multi_line_select(frame, box_width=50, box_height=50, spacing=30):
             cv2.imshow('Multi Line Select', frame_preview)
         elif event == cv2.EVENT_LBUTTONUP:
             drawing = False
-            if len(current_line) > 1:
+            if len(current_line) >= 1:
                 all_lines.append(current_line)
                 print(f"Finished line {len(all_lines)} with {len(current_line)} points")
             current_line = []
@@ -157,6 +157,10 @@ def multi_line_select(frame, box_width=50, box_height=50, spacing=30):
     for line_idx, line_points in enumerate(all_lines):
         all_bboxes.append([])
         if len(line_points) < 2:
+            x, y = line_points[0]
+            bbox = (int(x - box_width/2), int(y - box_height/2), box_width, box_height)
+            all_bboxes[line_idx].append(bbox)
+
             continue
         
         # Calculate distances along the line
@@ -388,6 +392,11 @@ if __name__ == '__main__':
 
     
     all_bboxes = multi_line_select(frame, box_width=BOX_WIDTH, box_height=BOX_HEIGHT, spacing=BOX_SPACING)
+
+
+
+    
+    
     flat = list(itertools.chain.from_iterable(all_bboxes))
 
 
@@ -404,7 +413,10 @@ if __name__ == '__main__':
         count = 0
         for line in all_bboxes:
             drawn_centres = []
-            for i in range(count, count + len(line)):
+            boxes = False
+            if len(line) == 1:
+                boxes = True
+            for i in range(count, count + len(line)): # Updating trackes for all the boxes in the current line
                 # Update each tracker
                 ok1 = ok2 = ok3 = False
                 ok1, dummy1 = trackers[0][i].update(frame)
@@ -438,7 +450,7 @@ if __name__ == '__main__':
             
 
 
-                drawn_centre = display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, boxes=False)
+                drawn_centre = display(bbox1, bbox2, bbox3, ok1, ok2, ok3, frame, boxes=boxes)
                 if drawn_centre != (0, 0):
                     drawn_centres.append(drawn_centre)
 
