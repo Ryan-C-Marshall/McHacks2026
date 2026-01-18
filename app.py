@@ -3,7 +3,7 @@ from flask import Flask, render_template, make_response, request
 from flask_socketio import SocketIO
 import cv2
 
-from util import load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH, delete_tracker, STATE_LOCK
+from util import load_video_thumbnail, load_videos_from_directory, stream_video, DEFAULT_VIDEO_PATH, delete_tracker, STATE_LOCK, add_arrow_to_tracker, add_text_to_tracker
 
 tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 
@@ -32,6 +32,15 @@ state = {
 
 stream_thread = None
 
+def _bbox_offsets_from_abs_click(tracker_obj: dict, x: int, y: int):
+    """Convert absolute frame coords (x,y) to offsets relative to latest bbox.
+    Returns (dx, dy) or None if bbox not available.
+    """
+    bbox = tracker_obj.get("last_bbox")
+    if not bbox:
+        return None
+    bx, by, bw, bh = bbox
+    return (int(x - bx), int(y - by))
 
 @app.route("/")
 def index():
@@ -117,6 +126,49 @@ def handle_delete_all():
         trackers = []
 
     socketio.emit("trackers_list", {"trackers": trackers})
+
+@socketio.on("add_text")
+def handle_add_text(data):
+    idx = int(data.get("tracker_num", -1))
+    x = int(data.get("x"))
+    y = int(data.get("y"))
+    text = str(data.get("text", "")).strip()
+    if idx < 0 or not text:
+        socketio.emit("status", "Text not added (missing tracker or empty text)")
+        return
+
+    with STATE_LOCK:
+        if idx >= len(state.get("trackers", [])):
+            socketio.emit("status", f"Text not added (tracker {idx} not found)")
+            return
+        tracker_obj = state["trackers"][idx]
+        offs = _bbox_offsets_from_abs_click(tracker_obj, x, y)
+        add_text_to_tracker(tracker_obj, text, offs)
+
+    socketio.emit("status", f"Added text to tracker {idx}")
+
+
+@socketio.on("add_arrow")
+def handle_add_arrow(data):
+    idx = int(data.get("tracker_num"))
+    start = data.get("start") or {}
+    end = data.get("end") or {}
+    sx, sy = int(start.get("x")), int(start.get("y"))
+    ex, ey = int(end.get("x")), int(end.get("y"))
+    if idx < 0:
+        socketio.emit("status", "Arrow not added (no tracker selected)")
+        return
+
+    with STATE_LOCK:
+        if idx >= len(state.get("trackers", [])):
+            socketio.emit("status", f"Arrow not added (tracker {idx} not found)")
+            return
+        tracker_obj = state["trackers"][idx]
+        s_offs = _bbox_offsets_from_abs_click(tracker_obj, sx, sy)
+        e_offs = _bbox_offsets_from_abs_click(tracker_obj, ex, ey)
+        add_arrow_to_tracker(tracker_obj, s_offs, e_offs)
+
+    socketio.emit("status", f"Added arrow to tracker {idx}")
 
 
 if __name__ == "__main__":

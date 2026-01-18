@@ -196,24 +196,6 @@
                           />
                         </svg>
                       </button>
-
-                      <!-- Select tool -->
-                      <button
-                        type="button"
-                        class="btn btn-outline-secondary tool-btn"
-                        id="toolSelect"
-                        title="Select tool"
-                        aria-label="Select tool"
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path
-                            d="M6 4l7 16 2.2-6.2L21 12 6 4z"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linejoin="round"
-                          />
-                        </svg>
-                      </button>
                       <button
                         type="button"
                         class="btn btn-outline-danger tool-btn mt-2"
@@ -329,6 +311,8 @@
       const pauseBtn = document.getElementById("pauseBtn");
       const statusDiv = document.getElementById("status");
       const deleteTrackerBtn = document.getElementById("deleteTrackerBtn");
+
+      let pendingArrowStart = null;
 
       let trackerCount = 0;
       const trackerButtons = [];
@@ -452,6 +436,12 @@
         const isAddTrackerMode = document
           .getElementById("toolTracker")
           .classList.contains("active");
+        const isAddArrowMode = document
+          .getElementById("toolArrow")
+          .classList.contains("active");
+        const isAddTextMode = document
+          .getElementById("toolText")
+          .classList.contains("active");
 
         if (isAddTrackerMode) {
           // Create the UI button
@@ -461,6 +451,24 @@
 
           // Otherwise normal behavior
           socket.emit("select_point", { x: trackX, y: trackY });
+        } else if (isAddArrowMode) {
+          setStatus(`Arrow tool clicked at (${trackX}, ${trackY})`);
+          socket.emit("add_arrow", {
+            tracker_num: activeTracker,
+            x: trackX,
+            y: trackY,
+          });
+        } else {
+          setStatus(`Text tool clicked at (${trackX}, ${trackY})`);
+          const userText = prompt("Enter text to add:");
+          if (userText) {
+            socket.emit("add_text", {
+              tracker_num: activeTracker,
+              x: trackX,
+              y: trackY,
+              text: userText,
+            });
+          }
         }
       });
 
@@ -472,14 +480,18 @@
       const toolButtons = [
         document.getElementById("toolArrow"),
         document.getElementById("toolText"),
-        document.getElementById("toolSelect"),
         document.getElementById("toolTracker"),
       ];
 
       function setActiveTool(btn) {
         toolButtons.forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
+
+        if (btn.id !== "toolArrow") {
+          pendingArrowStart = null;
+        }
       }
+
       function setActiveTracker(btn) {
         trackerButtons.forEach((b) => b.classList.remove("active-tracker"));
         btn.classList.add("active-tracker");

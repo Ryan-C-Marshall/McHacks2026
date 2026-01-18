@@ -77,6 +77,13 @@ def make_square_bbox(center, box_size, w, h):
     y = max(0, min(y, h - box_size))
     return (x, y, int(box_size), int(box_size))
 
+def add_text_to_tracker(tracker_obj, text, position):
+    print(position)
+    tracker_obj["texts"].append((text, position))
+
+def add_arrow_to_tracker(tracker_obj, start_point, end_point):
+    tracker_obj["arrows"].append((start_point, end_point))
+
 def create_new_tracker(state, tracker_type, box_size, frame, socketio):
     h, w = frame.shape[:2]
 
@@ -89,25 +96,23 @@ def create_new_tracker(state, tracker_type, box_size, frame, socketio):
 
     bbox0 = make_square_bbox(pt, box_size, w, h)
 
-    try:
-        new_tracker = {"tracker": pick_tracker(tracker_type), "tracker_inited": False}
-        new_tracker["texts"] = [(f"{tracker_type} Tracker ({len(state['trackers']) + 1})", (10, -20))]
-        new_tracker["arrows"] = [((0, 0), (box_size, box_size))]
+    new_tracker = {"tracker": pick_tracker(tracker_type), "tracker_inited": False}
+    new_tracker["texts"] = []
+    new_tracker["arrows"] = []
+    # new_tracker["texts"] = [(f"{tracker_type} Tracker ({len(state['trackers']) + 1})", (10, -20))]
+    # new_tracker["arrows"] = [((0, 0), (box_size, box_size))]
 
-        new_tracker["tracker"].init(frame, bbox0)
-        
-        ok_init, _ = new_tracker["tracker"].update(frame)
-        new_tracker["tracker_inited"] = bool(ok_init)
-        
-        if not new_tracker["tracker_inited"]:
-            new_tracker["tracker"] = None
-        
-        with STATE_LOCK:
-            state["trackers"].append(new_tracker)
-        socketio.emit("status", f"Tracker initialized ({tracker_type}): {new_tracker['tracker_inited']}")
-
-    except Exception as e:
-        socketio.emit("status", f"Tracker init failed ({tracker_type}): {e}")
+    new_tracker["tracker"].init(frame, bbox0)
+    
+    ok_init, _ = new_tracker["tracker"].update(frame)
+    new_tracker["tracker_inited"] = bool(ok_init)
+    
+    if not new_tracker["tracker_inited"]:
+        new_tracker["tracker"] = None
+    
+    with STATE_LOCK:
+        state["trackers"].append(new_tracker)
+    socketio.emit("status", f"Tracker initialized ({tracker_type}): {new_tracker['tracker_inited']}")
     
 def delete_tracker(state, tracker_num):
     with STATE_LOCK:
@@ -119,6 +124,7 @@ def delete_all_trackers(state):
         state["trackers"] = []
 
 def update_tracker(state, frame, tracker_type, tracker_num):
+
     with STATE_LOCK:
         if tracker_num >= len(state["trackers"]):
             return
@@ -130,6 +136,11 @@ def update_tracker(state, frame, tracker_type, tracker_num):
 
     if ok:
         x, y, bw, bh = bbox
+
+        # with STATE_LOCK:
+        #     tracker_obj["last_bbox"] = (float(x), float(y), float(bw), float(bh))
+
+
         cx = int(x + bw / 2)
         cy = int(y + bh / 2)
 
