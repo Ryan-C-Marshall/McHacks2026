@@ -4,7 +4,9 @@ import numpy as np
 from scipy.interpolate import splprep, splev
 from kcf_to_csrt import contains
 
-FRAME_RESIZE = 8
+FRAME_RESIZE = 1
+NUM_POINTS = 3
+BOX_SIZE = 100
 
 '''
 /////////////////////////////////////////////
@@ -316,7 +318,7 @@ def draw_smooth_line(frame, centers, color=(0, 255, 0), thickness=2):
 
 if __name__ == '__main__':
     # Read video
-    video = cv2.VideoCapture("videos/Echo/echo1.mp4")
+    video = cv2.VideoCapture("videos/Lapchole/Lapchole3.mp4")
     
     if not video.isOpened():
         print("Could not open video")
@@ -388,8 +390,7 @@ if __name__ == '__main__':
         sys.exit()
     
     # Configuration
-    NUM_POINTS = 3
-    BOX_SIZE = 350
+
     
     # Interpolate points along the line
     box_centers = interpolate_line_points(state['user_points'], NUM_POINTS)
@@ -481,7 +482,7 @@ if __name__ == '__main__':
             x, y = center
             top_left = (x - BOX_SIZE // 2, y - BOX_SIZE // 2)
             bottom_right = (x + BOX_SIZE // 2, y + BOX_SIZE // 2)
-            cv2.rectangle(frame, top_left, bottom_right, (255, 0, 0), 1)
+            cv2.circle(frame, (x, y), bottom_right, (255, 0, 0), 1)
             cv2.circle(frame, (x, y), 2, (0, 255, 255), -1)
         
         cv2.imshow("Tracking", frame)

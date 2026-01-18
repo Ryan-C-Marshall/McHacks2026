@@ -1,6 +1,6 @@
 import cv2
 import sys
-
+import math
 from polars import col
 
 FRAME_RESIZE = 8
@@ -25,6 +25,44 @@ def contains(box_1, box_2, allowance=ALLOWANCE):
     if (x1_1 - allowance <= center_x <= x1_1 + w1 + allowance) and (y1_1 - allowance <= center_y <= y1_1 + h1 + allowance):
         return True
     return False
+
+def contains_circle(bbox_1, bbox_2, allowance=ALLOWANCE):
+    """
+    Check if circle_2's center is within circle_1's radius.
+    Converts bounding boxes to circles automatically.
+    
+    Args:
+        bbox_1: tuple (x, y, width, height)
+        bbox_2: tuple (x, y, width, height)
+        allowance: float, percentage allowance (default 0.1 = 10%)
+    
+    Returns:
+        bool: True if circle_2's center is inside circle_1
+    """
+    # Convert bbox to circle centers
+    x1, y1, w1, h1 = bbox_1
+    x2, y2, w2, h2 = bbox_2
+    
+    # Calculate centers
+    c1_x = x1 + w1 / 2
+    c1_y = y1 + h1 / 2
+    c2_x = x2 + w2 / 2
+    c2_y = y2 + h2 / 2
+    
+    # Use average of width and height as diameter, then divide by 2 for radius
+    r1 = (w1 + h1) / 4
+    
+    # Expand circle_1's radius by allowance percentage
+    effective_radius = r1 * (allowance)
+    
+    # Calculate distance between centers
+    distance = math.sqrt((c2_x - c1_x)**2 + (c2_y - c1_y)**2)
+    
+    # Check if center of circle_2 is within effective radius of circle_1
+    return distance <= effective_radius
+
+
+
 
 
 def not_wider(box_1, box_2, size_allowance=SIZE_ALLOWANCE):
