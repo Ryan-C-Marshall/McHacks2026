@@ -1,5 +1,9 @@
 import cv2
 import base64
+import threading
+
+STATE_LOCK = threading.RLock()
+
 
 DEFAULT_VIDEO_PATH = "videos/Echo/echo1.mp4"
 
@@ -76,8 +80,12 @@ def make_square_bbox(center, box_size, w, h):
 def create_new_tracker(state, tracker_type, box_size, frame, socketio):
     h, w = frame.shape[:2]
 
-    pt = state["clicked_pt"]
-    state["clicked_pt"] = None  # consume click to avoid repeated init attempts
+    with STATE_LOCK:
+        pt = state["clicked_pt"]
+        state["clicked_pt"] = None
+
+    if pt is None:
+        return
 
     bbox0 = make_square_bbox(pt, box_size, w, h)
 
@@ -91,24 +99,30 @@ def create_new_tracker(state, tracker_type, box_size, frame, socketio):
         if not new_tracker["tracker_inited"]:
             new_tracker["tracker"] = None
         
-        state["trackers"].append(new_tracker)
+        with STATE_LOCK:
+            state["trackers"].append(new_tracker)
         socketio.emit("status", f"Tracker initialized ({tracker_type}): {new_tracker['tracker_inited']}")
 
     except Exception as e:
         socketio.emit("status", f"Tracker init failed ({tracker_type}): {e}")
     
-    print("Current trackers:", state["trackers"])
-
 def delete_tracker(state, tracker_num):
-    if 0 <= tracker_num < len(state["trackers"]):
-        del state["trackers"][tracker_num]
+    with STATE_LOCK:
+        if 0 <= tracker_num < len(state["trackers"]):
+            state["trackers"].pop(tracker_num)
 
 def delete_all_trackers(state):
-    state["trackers"] = []
+    with STATE_LOCK:
+        state["trackers"] = []
 
 def update_tracker(state, frame, tracker_type, tracker_num):
+    with STATE_LOCK:
+        if tracker_num >= len(state["trackers"]):
+            return
+
+        tracker_entry = state["trackers"][tracker_num]
     timer = cv2.getTickCount()
-    ok, bbox = state["trackers"][tracker_num]["tracker"].update(frame)
+    ok, bbox = tracker_entry["tracker"].update(frame)
     fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
 
     if ok:
@@ -194,10 +208,11 @@ def stream_video(
         num_trackers = len(state.get("trackers", []))
 
         # Update trackers (if initialized)
-        if num_trackers > 0:
-            for i in range(num_trackers):
-                if state["trackers"][i]["tracker_inited"] and state["trackers"][i]["tracker"] is not None:
-                    update_tracker(state, frame, tracker_type, tracker_num=i)
+        with STATE_LOCK:
+            tracker_indices = list(range(len(state.get("trackers", []))))
+
+        for i in tracker_indices:
+            update_tracker(state, frame, tracker_type, tracker_num=i)
 
         # Encode and emit frame
         ok_jpg, buffer = cv2.imencode(".jpg", frame)
