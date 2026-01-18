@@ -3,8 +3,10 @@ import sys
 import numpy as np
 from kcf_to_csrt import contains
 
-FRAME_RESIZE = 0.2
-PATH = "videos/POCUS/Vascular.mp4"
+FRAME_RESIZE = 10
+PATH = "videos/Echo/echo4.mp4"
+KCF_WEIGHT = 0.8
+CSRT_WEIGHT = 0.75
 
 
 def draw_tracked_boxes(frame, trackers_data):
@@ -29,27 +31,33 @@ def draw_tracked_boxes(frame, trackers_data):
     names = [t['name'] for t in successful]
     
     if 'KCF' in names:
-        remaining = 0.30
+        # KCF gets 80%, distribute remaining 20%
+        remaining = 1-KCF_WEIGHT
         for t in successful:
             if t['name'] == 'KCF':
-                weights.append(0.70)
+                weights.append(KCF_WEIGHT)
             elif t['name'] == 'CSRT':
-                weights.append(0.50 * remaining)
+                # CSRT gets 75% of the remaining
+                weights.append(CSRT_WEIGHT * remaining)
             else:
+                # Others split what's left
                 other_count = sum(1 for n in names if n not in ['KCF', 'CSRT'])
                 if 'CSRT' in names:
-                    weights.append((0.50 * remaining) / other_count if other_count > 0 else 0)
+                    weights.append((1-CSRT_WEIGHT * remaining) / other_count if other_count > 0 else 0)
                 else:
                     weights.append(remaining / other_count if other_count > 0 else 0)
     else:
+        # KCF not available
         if 'CSRT' in names:
+            # CSRT gets 75%, others split 25%
             for t in successful:
                 if t['name'] == 'CSRT':
-                    weights.append(0.50)
+                    weights.append(CSRT_WEIGHT)
                 else:
                     other_count = sum(1 for n in names if n != 'CSRT')
-                    weights.append(0.50 / other_count if other_count > 0 else 0)
+                    weights.append(1-CSRT_WEIGHT / other_count if other_count > 0 else 0)
         else:
+            # Neither KCF nor CSRT available, equal weights
             equal_weight = 1.0 / len(successful)
             weights = [equal_weight] * len(successful)
     
@@ -165,13 +173,20 @@ def draw_rotated_box(frame, bbox, angle, color=(0, 255, 255), thickness=2):
 def select_rotated_roi(frame):
     """
     Interactive rotated rectangle selection.
+    Two-step process:
+    1. Click and drag to define rectangle size (diagonal corners)
+    2. Click and drag again to rotate around center
     """
     state = {
+        'step': 1,  # 1 = sizing, 2 = rotating
         'drawing': False,
         'start_point': None,
-        'current_point': None,
-        'initial_y': None,
+        'end_point': None,
+        'center': None,
+        'width': 0,
+        'height': 0,
         'angle': 0,
+        'rotation_start': None,
         'finished': False,
         'cancelled': False
     }
@@ -179,108 +194,176 @@ def select_rotated_roi(frame):
     clone = frame.copy()
     
     def mouse_callback(event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            state['drawing'] = True
-            state['start_point'] = (x, y)
-            state['current_point'] = (x, y)
-            state['initial_y'] = y
-            state['angle'] = 0
-            
-        elif event == cv2.EVENT_MOUSEMOVE:
-            if state['drawing']:
-                state['current_point'] = (x, y)
-                y_diff = state['initial_y'] - y
-                state['angle'] = y_diff * 0.5
-            
-            temp = clone.copy()
-            draw_rotated_rectangle(temp, state)
-            cv2.imshow('ROI Selector', temp)
-            
-        elif event == cv2.EVENT_LBUTTONUP:
-            state['drawing'] = False
+        if state['step'] == 1:
+            # Step 1: Define rectangle size
+            if event == cv2.EVENT_LBUTTONDOWN:
+                state['drawing'] = True
+                state['start_point'] = (x, y)
+                state['end_point'] = (x, y)
+                
+            elif event == cv2.EVENT_MOUSEMOVE:
+                if state['drawing']:
+                    state['end_point'] = (x, y)
+                
+                temp = clone.copy()
+                draw_rectangle(temp, state)
+                cv2.imshow('ROI Selector', temp)
+                
+            elif event == cv2.EVENT_LBUTTONUP:
+                state['drawing'] = False
+                state['end_point'] = (x, y)
+                
+                # Calculate center, width, height
+                if state['start_point'] and state['end_point']:
+                    x1, y1 = state['start_point']
+                    x2, y2 = state['end_point']
+                    state['center'] = ((x1 + x2) / 2, (y1 + y2) / 2)
+                    state['width'] = abs(x2 - x1)
+                    state['height'] = abs(y2 - y1)
+                    
+                    if state['width'] >= 10 and state['height'] >= 10:
+                        state['step'] = 2
+                        print("Rectangle created! Now click and drag to rotate.")
+        
+        elif state['step'] == 2:
+            # Step 2: Rotate rectangle
+            if event == cv2.EVENT_LBUTTONDOWN:
+                state['drawing'] = True
+                state['rotation_start'] = (x, y)
+                state['angle'] = 0
+                
+            elif event == cv2.EVENT_MOUSEMOVE:
+                if state['drawing'] and state['rotation_start']:
+                    # Calculate angle from center
+                    cx, cy = state['center']
+                    
+                    # Get angle from center to rotation start point
+                    start_x, start_y = state['rotation_start']
+                    angle_start = np.arctan2(start_y - cy, start_x - cx)
+                    
+                    # Get angle from center to current point
+                    angle_current = np.arctan2(y - cy, x - cx)
+                    
+                    # Calculate rotation angle in degrees
+                    state['angle'] = np.degrees(angle_current - angle_start)
+                
+                temp = clone.copy()
+                draw_rectangle(temp, state)
+                cv2.imshow('ROI Selector', temp)
+                
+            elif event == cv2.EVENT_LBUTTONUP:
+                state['drawing'] = False
     
-    def draw_rotated_rectangle(img, state):
-        cv2.putText(img, "Drag: resize | Move up/down: rotate | ENTER: confirm | ESC: cancel", 
-                   (10, img.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        if state['start_point'] is None or state['current_point'] is None:
-            return
-        
-        x1, y1 = state['start_point']
-        x2, y2 = state['current_point']
-        
-        center_x = (x1 + x2) / 2
-        center_y = (y1 + y2) / 2
-        width = abs(x2 - x1)
-        height = abs(y2 - y1)
-        
-        if width < 5 or height < 5:
-            cv2.putText(img, "Draw a larger rectangle", (10, 30), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            return
-        
-        rect = ((center_x, center_y), (width, height), state['angle'])
-        
-        try:
-            box = cv2.boxPoints(rect)
-            box = np.intp(box)
+    def draw_rectangle(img, state):
+        if state['step'] == 1:
+            # Step 1: Draw sizing rectangle
+            cv2.putText(img, "STEP 1: Click and drag to set rectangle size", 
+                       (10, img.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
-            cv2.drawContours(img, [box], 0, (0, 255, 0), 2)
-            cv2.circle(img, (int(center_x), int(center_y)), 3, (0, 0, 255), -1)
+            if state['start_point'] and state['end_point']:
+                x1, y1 = state['start_point']
+                x2, y2 = state['end_point']
+                
+                cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                
+                width = abs(x2 - x1)
+                height = abs(y2 - y1)
+                
+                cv2.putText(img, f"Size: {width}x{height}", (10, 30), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                if width >= 10 and height >= 10:
+                    cv2.putText(img, "Release to proceed to rotation", (10, 60), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        
+        elif state['step'] == 2:
+            # Step 2: Draw rotated rectangle
+            cv2.putText(img, "STEP 2: Click and drag to rotate | ENTER: confirm | ESC: cancel | R: reset", 
+                       (10, img.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
-            angle_text = f"Angle: {int(state['angle'])}° | Size: {int(width)}x{int(height)}"
-            cv2.putText(img, angle_text, (10, 30), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        except Exception as e:
-            print(f"Error: {e}")
+            cx, cy = state['center']
+            
+            # Create rotated rectangle
+            rect = ((cx, cy), (state['width'], state['height']), state['angle'])
+            
+            try:
+                box = cv2.boxPoints(rect)
+                box = np.intp(box)
+                
+                cv2.drawContours(img, [box], 0, (0, 255, 0), 2)
+                
+                # Draw center point
+                cv2.circle(img, (int(cx), int(cy)), 5, (0, 0, 255), -1)
+                
+                # Draw rotation indicator line if rotating
+                if state['drawing'] and state['rotation_start']:
+                    cv2.line(img, (int(cx), int(cy)), state['rotation_start'], (255, 0, 255), 1)
+                    cv2.line(img, (int(cx), int(cy)), (int(cx) + 50, int(cy)), (0, 255, 255), 2)
+                
+                cv2.putText(img, f"Angle: {int(state['angle'])}° | Size: {int(state['width'])}x{int(state['height'])}", 
+                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            except Exception as e:
+                print(f"Error: {e}")
     
     cv2.namedWindow('ROI Selector')
     cv2.setMouseCallback('ROI Selector', mouse_callback)
     
     temp = clone.copy()
-    draw_rotated_rectangle(temp, state)
+    draw_rectangle(temp, state)
     cv2.imshow('ROI Selector', temp)
     
     print("Instructions:")
-    print("- Click and drag to set size")
-    print("- Move mouse UP/DOWN while dragging to rotate")
+    print("STEP 1: Click and drag diagonally to set rectangle size")
+    print("STEP 2: Click and drag to rotate the rectangle around its center")
     print("- Press SPACE or ENTER to confirm")
+    print("- Press 'R' to reset and start over")
     print("- Press ESC to cancel")
     
     while True:
         key = cv2.waitKey(1) & 0xFF
         
-        if key == 13 or key == 32:
-            state['finished'] = True
-            break
-        elif key == 27:
+        if key == 13 or key == 32:  # ENTER or SPACE
+            if state['step'] == 2:
+                state['finished'] = True
+                break
+        elif key == 27:  # ESC
             state['cancelled'] = True
             break
+        elif key == ord('r') or key == ord('R'):
+            # Reset to step 1
+            state['step'] = 1
+            state['drawing'] = False
+            state['start_point'] = None
+            state['end_point'] = None
+            state['center'] = None
+            state['width'] = 0
+            state['height'] = 0
+            state['angle'] = 0
+            state['rotation_start'] = None
+            temp = clone.copy()
+            draw_rectangle(temp, state)
+            cv2.imshow('ROI Selector', temp)
+            print("Reset! Start again from step 1.")
     
     cv2.destroyWindow('ROI Selector')
     
-    if state['cancelled'] or state['start_point'] is None or state['current_point'] is None:
+    if state['cancelled'] or state['step'] != 2:
         return None, None
     
-    x1, y1 = state['start_point']
-    x2, y2 = state['current_point']
+    cx, cy = state['center']
     
-    center_x = (x1 + x2) / 2
-    center_y = (y1 + y2) / 2
-    width = abs(x2 - x1)
-    height = abs(y2 - y1)
-    
-    if width < 5 or height < 5:
+    if state['width'] < 10 or state['height'] < 10:
         return None, None
     
+    # Bbox
     bbox = (
-        int(center_x - width / 2),
-        int(center_y - height / 2),
-        int(width),
-        int(height)
+        int(cx - state['width'] / 2),
+        int(cy - state['height'] / 2),
+        int(state['width']),
+        int(state['height'])
     )
     
-    rotated_rect = ((center_x, center_y), (width, height), state['angle'])
+    rotated_rect = ((cx, cy), (state['width'], state['height']), state['angle'])
     
     return bbox, rotated_rect
 

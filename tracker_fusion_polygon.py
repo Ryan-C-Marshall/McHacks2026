@@ -4,7 +4,7 @@ import numpy as np
 from kcf_to_csrt import contains
 
 FRAME_RESIZE = 10
-PATH = "videos/Echo/echo3.mp4"
+PATH = "videos/Echo/echo2.mp4"
 BOX_SIZE = 150  # Size of tracking box for each vertex
 KCF_WEIGHT = 0.9
 CSRT_WEIGHT = 0.8
