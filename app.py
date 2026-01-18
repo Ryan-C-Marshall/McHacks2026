@@ -29,6 +29,7 @@ state = {
     "show_bbox": True,
     "resume_frame": 0,
     "video_path": None,
+    "ensemble_types": ["KCF", "CSRT", "MEDIANFLOW"],
 }
 
 stream_thread = None

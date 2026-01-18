@@ -71,6 +71,11 @@
         width: 22px;
         height: 22px;
       }
+      /* Right column for tracker selector buttons */
+      .right-tools {
+        width: 72px; /* matches left tools */
+        padding: 8px 6px;
+      }
 
       /* Left column width (rail + bottom button) */
       .left-tools {
@@ -237,10 +242,6 @@
                     </div>
 
                     <!-- BUTTON BELOW TOOL RAIL -->
-                    <div
-                      id="trackerButtonList"
-                      class="d-flex flex-column gap-2 mt-2 mb-2"
-                    ></div>
                     <button
                       type="button"
                       class="btn btn-outline-secondary tool-btn active bottom mt-auto"
@@ -265,11 +266,24 @@
                     </button>
                   </div>
 
-                  <!-- CANVAS AREA (RIGHT) -->
-                  <div
-                    class="ratio ratio-4x3 border rounded overflow-hidden flex-grow-1"
-                  >
-                    <canvas id="videoCanvas"></canvas>
+                  <!-- CANVAS AREA (CENTER) + TRACKER SELECTORS (RIGHT) -->
+                  <div class="d-flex flex-grow-1 gap-2">
+                    <!-- Canvas -->
+                    <div
+                      class="ratio ratio-4x3 border rounded overflow-hidden flex-grow-1"
+                    >
+                      <canvas id="videoCanvas"></canvas>
+                    </div>
+
+                    <!-- Right-side tracker selector buttons -->
+                    <div
+                      class="d-flex flex-column align-items-center right-tools"
+                    >
+                      <div
+                        id="trackerButtonList"
+                        class="d-flex flex-column gap-2 mt-2 mb-2"
+                      ></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -418,7 +432,7 @@
 
         // Don't use btn-success (it will override your background)
         btn.className = "btn tracker-btn";
-        btn.title = `Tracker ${idx + 1}`;
+        btn.title = `Tracker ${idx}`;
         btn.setAttribute("aria-label", `Tracker ${idx + 1}`);
 
         btn.style.backgroundColor = bg;
@@ -557,7 +571,7 @@
         }
 
         reindexTrackersUI();
-        setStatus(`Deleted tracker ${idx}`);
+        setStatus(`Deleted Tracker ${idx}`);
       });
 
       socket.on("connect", () => {

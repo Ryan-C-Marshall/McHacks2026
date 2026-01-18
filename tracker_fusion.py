@@ -80,18 +80,10 @@ def draw_tracked_boxes(frame, trackers_data):
     
     for t, weight in zip(successful, weights):
         bbox = t['bbox']
-        color = t['color']
         name = t['name']
         
         p1 = (int(bbox[0]), int(bbox[1]))
         p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
-        
-        cv2.rectangle(frame, p1, p2, color, 1, 1)
-        
-        # Label each box with tracker name and weight
-        label_pos = (p1[0], p1[1] - 5)
-        cv2.putText(frame, f"{name} {int(weight*100)}%", label_pos, 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
         
         all_p1.append(p1)
         all_p2.append(p2)
@@ -107,13 +99,9 @@ def draw_tracked_boxes(frame, trackers_data):
             int(sum(p[0] * w for p, w in zip(all_p2, weights))),
             int(sum(p[1] * w for p, w in zip(all_p2, weights)))
         )
-        
-        # Draw consensus box in cyan, thicker
-        cv2.rectangle(frame, mean_p1, mean_p2, (0, 255, 255), 1, 1)
-        cv2.putText(frame, "Consensus", (mean_p1[0], mean_p1[1] - 5), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
     
-    return frame
+        return mean_p1, mean_p2
+    return None
 
 
 

@@ -2,6 +2,8 @@ import cv2
 import base64
 import threading
 
+from tracker_fusion import draw_tracked_boxes
+
 STATE_LOCK = threading.RLock()
 
 
@@ -99,7 +101,7 @@ def create_new_tracker(state, tracker_type, box_size, frame, socketio):
     h, w = frame.shape[:2]
 
     with STATE_LOCK:
-        pt = state["clicked_pt"]
+        pt = state.get("clicked_pt")
         state["clicked_pt"] = None
 
     if pt is None:
@@ -107,23 +109,37 @@ def create_new_tracker(state, tracker_type, box_size, frame, socketio):
 
     bbox0 = make_square_bbox(pt, box_size, w, h)
 
-    new_tracker = {"tracker": pick_tracker(tracker_type), "tracker_inited": False}
-    new_tracker["colour"] = generate_tracker_colour(len(state["trackers"]))
-    new_tracker["texts"] = []
-    new_tracker["arrows"] = []
+    ensemble_types = state.get("ensemble_types")
 
-    new_tracker["tracker"].init(frame, bbox0)
-    
-    ok_init, bbox = new_tracker["tracker"].update(frame)
-    new_tracker["tracker_inited"] = bool(ok_init)
-    new_tracker["last_bbox"] = bbox if ok_init else bbox0
-    
-    if not new_tracker["tracker_inited"]:
-        new_tracker["tracker"] = None
-    
+    tracker_group = {
+        "subtrackers": [],      # list[ {name, tracker, ok, bbox} ]
+        "last_bbox": bbox0,     # consensus bbox will live here
+        "texts": [],
+        "arrows": [],
+        "colour": generate_tracker_colour(len(state["trackers"])),
+    }
+
+    # Create and init each algorithm with the same bbox
+    for name in ensemble_types:
+        tr = pick_tracker(name)
+        tr.init(frame, bbox0)
+        ok, bb = tr.update(frame)  # “prime” it like your prototype
+        tracker_group["subtrackers"].append({
+            "name": name,
+            "tracker": tr,
+            "ok": bool(ok),
+            "bbox": bb if ok else bbox0,
+        })
+
+    # If at least one subtracker is OK, seed last_bbox from the “best available”
+    ok_list = [t for t in tracker_group["subtrackers"] if t["ok"]]
+    if ok_list:
+        tracker_group["last_bbox"] = ok_list[0]["bbox"]
+
     with STATE_LOCK:
-        state["trackers"].append(new_tracker)
-    socketio.emit("status", f"Tracker initialized ({tracker_type}): {new_tracker['tracker_inited']}")
+        state["trackers"].append(tracker_group)
+
+    socketio.emit("status", f"Tracker group initialized with: {ensemble_types}")
     
 def delete_tracker(state, tracker_num):
     with STATE_LOCK:
@@ -136,71 +152,71 @@ def delete_all_trackers(state):
 
 def update_tracker(state, frame, tracker_type, tracker_num, paused=False):
     with STATE_LOCK:
-        if tracker_num >= len(state["trackers"]):
+        if tracker_num >= len(state.get("trackers", [])):
             return
-
         tracker_obj = state["trackers"][tracker_num]
-    
-    ok = True
+
     fps = None
+
+    subtrackers = tracker_obj["subtrackers"]
+
+    # Update each subtracker (unless paused)
     if not paused:
-        # Only calculate new tracker position if not paused
         timer = cv2.getTickCount()
-        ok, bbox = tracker_obj["tracker"].update(frame)
-        tracker_obj["last_bbox"] = bbox
+        for t in subtrackers:
+            tr = t.get("tracker")
+            if tr is None:
+                t["ok"] = False
+                continue
+            ok, bb = tr.update(frame)
+            t["ok"] = bool(ok)
+            t["bbox"] = bb
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
 
-    if ok:
-        x, y, bw, bh = tracker_obj["last_bbox"]
-        cx = int(x + bw / 2)
-        cy = int(y + bh / 2)
+    mean_p1, mean_p2 = draw_tracked_boxes(frame, tracker_obj["subtrackers"])
 
-        # Crosshair
-        cv2.drawMarker(
-            frame, (cx, cy), tracker_obj["colour"],
-            markerType=cv2.MARKER_CROSS, markerSize=14, thickness=2
-        )
+    # Save consensus bbox as this ROI’s anchor for text/arrows
+    with STATE_LOCK:
+        tracker_obj["last_bbox"] = (float(mean_p1[0]), float(mean_p1[1]),
+                                    float(mean_p2[0] - mean_p1[0]), float(mean_p2[1] - mean_p1[1]))
 
-        # Optional bbox
-        if state.get("show_bbox", True):
-            cv2.rectangle(
-                frame,
-                (int(x), int(y)),
-                (int(x + bw), int(y + bh)),
-                tracker_obj["colour"],
-                2
-            )
-        
-        # Texts
-        for text in tracker_obj.get("texts", []):
-            cv2.putText(
-                frame, text[0], (int(x) + text[1][0], int(y) + text[1][1] + 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, tracker_obj["colour"], 2
-            )
+    cons_w = float(mean_p2[0] - mean_p1[0])
+    cons_h = float(mean_p2[1] - mean_p1[1])
 
-        # Arrows
-        for arrow in tracker_obj.get("arrows", []):
-            cv2.arrowedLine(
-                frame,
-                (int(x) + arrow[0][0], int(y) + arrow[0][1]),
-                (int(x) + arrow[1][0], int(y) + arrow[1][1]),
-                tracker_obj["colour"],
-                2,
-                tipLength=0.3
-            )
-    else:
-        cv2.putText(
-            frame, "Tracking failure", (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2
-        )
+    cx = int(mean_p1[0] + cons_w / 2.0)
+    cy = int(mean_p1[1] + cons_h / 2.0)
+
+    cv2.drawMarker(
+        frame,
+        (cx, cy),
+        tracker_obj["colour"],
+        markerType=cv2.MARKER_CROSS,
+        markerSize=14,
+        thickness=2,
+    )
+    # Draw consensus box
+    if state.get("show_bbox", True):
+        cv2.rectangle(frame, mean_p1, mean_p2, tracker_obj["colour"], 2)
+
+    # Now draw your existing overlay items using the consensus bbox as the origin
+    x, y, bw, bh = tracker_obj["last_bbox"]
+
+    overlay_colour = tracker_obj.get("colour", (0, 255, 255))
+
+    # Texts (relative offsets)
+    for text, (dx, dy) in tracker_obj.get("texts", []):
+        cv2.putText(frame, text, (int(x) + dx, int(y) + dy + 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, overlay_colour, 2)
+
+    # Arrows (relative offsets)
+    for (sx, sy), (ex, ey) in tracker_obj.get("arrows", []):
+        cv2.arrowedLine(frame, (int(x) + sx, int(y) + sy),
+                        (int(x) + ex, int(y) + ey),
+                        overlay_colour, 2, tipLength=0.3)
 
     if tracker_num == 0 and fps is not None:
         cv2.putText(
-            frame, f"{tracker_type} Tracker", (10, 60),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
-        )
-        cv2.putText(
-            frame, f"FPS : {int(fps)}", (10, 90),
+            frame, f"FPS : {int(fps)}", (10, 30),
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
         )
 
@@ -266,7 +282,7 @@ def stream_video(
             tracker_indices = list(range(len(state.get("trackers", []))))
 
         for i in tracker_indices:
-            update_tracker(state, frame, tracker_type, tracker_num=i, paused=state["paused"])
+            update_tracker(state, frame, tracker_type, tracker_num=i, paused=state.get("paused", False))
 
         # Encode and emit frame
         ok_jpg, buffer = cv2.imencode(".jpg", frame)
