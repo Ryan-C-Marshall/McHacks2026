@@ -99,6 +99,13 @@ def create_new_tracker(state, tracker_type, box_size, frame, socketio):
     
     print("Current trackers:", state["trackers"])
 
+def delete_tracker(state, tracker_num):
+    if 0 <= tracker_num < len(state["trackers"]):
+        del state["trackers"][tracker_num]
+
+def delete_all_trackers(state):
+    state["trackers"] = []
+
 def update_tracker(state, frame, tracker_type, tracker_num):
     timer = cv2.getTickCount()
     ok, bbox = state["trackers"][tracker_num]["tracker"].update(frame)
@@ -130,14 +137,15 @@ def update_tracker(state, frame, tracker_type, tracker_num):
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2
         )
 
-    cv2.putText(
-        frame, f"{tracker_type} Tracker", (10, 60),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
-    )
-    cv2.putText(
-        frame, f"FPS : {int(fps)}", (10, 90),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
-    )
+    if tracker_num == 0:
+        cv2.putText(
+            frame, f"{tracker_type} Tracker", (10, 60),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
+        )
+        cv2.putText(
+            frame, f"FPS : {int(fps)}", (10, 90),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 170, 50), 2
+        )
 
 
 def stream_video(
