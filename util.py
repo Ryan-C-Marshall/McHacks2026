@@ -123,9 +123,9 @@ def update_tracker(state, frame, tracker_type, tracker_num):
         if tracker_num >= len(state["trackers"]):
             return
 
-        tracker_entry = state["trackers"][tracker_num]
+        tracker_obj = state["trackers"][tracker_num]
     timer = cv2.getTickCount()
-    ok, bbox = tracker_entry["tracker"].update(frame)
+    ok, bbox = tracker_obj["tracker"].update(frame)
     fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
 
     if ok:
